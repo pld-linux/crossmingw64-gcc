@@ -27,7 +27,6 @@ BuildRequires:	flex
 BuildRequires:	mpfr-devel
 BuildRequires:	texinfo >= 4.2
 Requires:	crossmingw64-binutils
-Requires:	gcc-dirs
 BuildRoot:	%{tmpdir}/%{name}-%{version}-root-%(id -u -n)
 
 %define		target		x86_64-mingw32
@@ -87,6 +86,7 @@ TEXCONFIG=false \
 	--with-build-sysroot=$build_sysroot \
 	--disable-shared \
 	--enable-threads=win32 \
+	--disable-sjlj-exceptions \
 	--enable-languages="c%{!?with_bootstrap:,c++}" \
 	--enable-c99 \
 	--enable-long-long \
@@ -100,6 +100,8 @@ TEXCONFIG=false \
 	--enable-__cxa_atexit \
 	--disable-libmudflap \
 	--disable-libssp \
+	--with-pkgversion="PLD-Linux" \
+	--with-bugurl="http://bugs.pld-linux.org" \
 	--target=%{target}
 
 %{__make} all
@@ -117,10 +119,8 @@ install gcc/specs $RPM_BUILD_ROOT%{gcclib}
 
 cd ..
 
-mv -f $RPM_BUILD_ROOT%{arch}/bin/%{target}-* $RPM_BUILD_ROOT%{_bindir}
-
-# already in arch/lib, shouldn't be here
-rm $RPM_BUILD_ROOT%{_libdir}/libiberty.a
+mv $RPM_BUILD_ROOT%{arch}/bin/%{target}-* $RPM_BUILD_ROOT%{_bindir}
+#rm $RPM_BUILD_ROOT%{_libdir}/libiberty.a
 
 gccdir=$RPM_BUILD_ROOT%{gcclib}
 mv $gccdir/include-fixed/{limits,syslimits}.h $gccdir/include
@@ -132,15 +132,6 @@ rm -r $gccdir/install-tools
 %{target}-strip -g -R.note -R.comment $RPM_BUILD_ROOT%{gcclib}/libgcov.a
 %endif
 
-#if %{without bootstrap}
-# restore hardlinks
-#ln -f $RPM_BUILD_ROOT%{_bindir}/%{target}-{g++,c++}
-#ln -f $RPM_BUILD_ROOT%{arch}/bin/{g++,c++}
-#endif
-
-# the same... make hardlink
-ln -f $RPM_BUILD_ROOT%{arch}/bin/gcc $RPM_BUILD_ROOT%{_bindir}/%{target}-gcc
-
 %clean
 rm -rf $RPM_BUILD_ROOT
 
@@ -150,16 +141,38 @@ rm -rf $RPM_BUILD_ROOT
 %attr(755,root,root) %{_bindir}/%{target}-cpp
 %attr(755,root,root) %{_bindir}/%{target}-gcov
 %attr(755,root,root) %{arch}/bin/gcc
-#{arch}/lib/libiberty.a
 %dir %{gccarch}
 %dir %{gcclib}
+%dir %{gcclib}/include
+%{gcclib}/include/ammintrin.h
+%{gcclib}/include/bmmintrin.h
+%{gcclib}/include/cpuid.h
+%{gcclib}/include/emmintrin.h
+%{gcclib}/include/float.h
+%{gcclib}/include/iso646.h
+%{gcclib}/include/limits.h
+%{gcclib}/include/mm3dnow.h
+%{gcclib}/include/mm_malloc.h
+%{gcclib}/include/mmintrin-common.h
+%{gcclib}/include/mmintrin.h
+%{gcclib}/include/nmmintrin.h
+%{gcclib}/include/pmmintrin.h
+%{gcclib}/include/smmintrin.h
+%{gcclib}/include/stdarg.h
+%{gcclib}/include/stdbool.h
+%{gcclib}/include/stddef.h
+%{gcclib}/include/stdfix.h
+%{gcclib}/include/syslimits.h
+%{gcclib}/include/tgmath.h
+%{gcclib}/include/tmmintrin.h
+%{gcclib}/include/unwind.h
+%{gcclib}/include/varargs.h
+%{gcclib}/include/xmmintrin.h
 %attr(755,root,root) %{gcclib}/cc1
 %attr(755,root,root) %{gcclib}/collect2
 %{gcclib}/libgcc.a
 %{gcclib}/libgcov.a
 %{gcclib}/specs*
-%dir %{gcclib}/include
-
 %{_mandir}/man1/%{target}-cpp.1*
 %{_mandir}/man1/%{target}-gcc.1*
 %{_mandir}/man1/%{target}-gcov.1*
