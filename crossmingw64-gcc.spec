@@ -78,7 +78,6 @@ TEXCONFIG=false \
 	--prefix=%{_prefix} \
 	--infodir=%{_infodir} \
 	--mandir=%{_mandir} \
-	--bindir=%{arch}/bin \
 	--libdir=%{_libdir} \
 	--libexecdir=%{_libexecdir} \
 	--includedir=%{arch}/include \
@@ -107,20 +106,21 @@ TEXCONFIG=false \
 %{__make} all
 
 %install
+build_sysroot=`pwd`/winsup/trunk
+
 rm -rf $RPM_BUILD_ROOT
-install -d $RPM_BUILD_ROOT{%{_bindir},%{_datadir}}
+install -d $RPM_BUILD_ROOT{%{_bindir},%{_datadir},%{arch}/mingw}
 
 cd BUILDDIR
 
-%{__make} install \
+%{__make} install-gcc install-target-libgcc \
 	DESTDIR=$RPM_BUILD_ROOT
 
 install gcc/specs $RPM_BUILD_ROOT%{gcclib}
 
 cd ..
 
-mv $RPM_BUILD_ROOT%{arch}/bin/%{target}-* $RPM_BUILD_ROOT%{_bindir}
-#rm $RPM_BUILD_ROOT%{_libdir}/libiberty.a
+rm $RPM_BUILD_ROOT%{_libdir}/libiberty.a
 
 gccdir=$RPM_BUILD_ROOT%{gcclib}
 mv $gccdir/include-fixed/{limits,syslimits}.h $gccdir/include
@@ -132,6 +132,8 @@ rm -r $gccdir/install-tools
 %{target}-strip -g -R.note -R.comment $RPM_BUILD_ROOT%{gcclib}/libgcov.a
 %endif
 
+cp -ar $build_sysroot/mingw-w64-headers/include $RPM_BUILD_ROOT%{arch}/mingw
+
 %clean
 rm -rf $RPM_BUILD_ROOT
 
@@ -140,7 +142,6 @@ rm -rf $RPM_BUILD_ROOT
 %attr(755,root,root) %{_bindir}/%{target}-gcc*
 %attr(755,root,root) %{_bindir}/%{target}-cpp
 %attr(755,root,root) %{_bindir}/%{target}-gcov
-%attr(755,root,root) %{arch}/bin/gcc
 %dir %{gccarch}
 %dir %{gcclib}
 %dir %{gcclib}/include
@@ -176,6 +177,8 @@ rm -rf $RPM_BUILD_ROOT
 %{_mandir}/man1/%{target}-cpp.1*
 %{_mandir}/man1/%{target}-gcc.1*
 %{_mandir}/man1/%{target}-gcov.1*
+%dir %{arch}/mingw
+%{arch}/mingw/include
 
 %if 0
 %files c++
