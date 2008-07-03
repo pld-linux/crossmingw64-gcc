@@ -1,6 +1,6 @@
 #
 # Conditional build:
-%bcond_with	bootstrap	# bootstrap build (only pure C compiler w/o startfiles)
+%bcond_with	bootstrap	# bootstrap build (only C compiler)
 #
 Summary:	Cross Mingw64 GNU binary utility development utilities - gcc
 Summary(es.UTF-8):	Utilitarios para desarrollo de binarios de la GNU - Mingw64 gcc
@@ -104,8 +104,7 @@ TEXCONFIG=false \
 	--host=%{_target_platform} \
 	--target=%{target}
 
-%{__make} all-gcc -j2
-%{__make} all-target-libgcc
+%{__make} -j2
 
 cd ..
 
@@ -133,11 +132,11 @@ cd -
 build_sysroot=`pwd`/winsup
 
 rm -rf $RPM_BUILD_ROOT
-install -d $RPM_BUILD_ROOT{%{_bindir},%{_datadir},%{arch}/mingw/include}
+install -d $RPM_BUILD_ROOT{%{_bindir},%{_datadir},%{arch}/lib,%{arch}/mingw/include}
 
 cd BUILDDIR
 
-%{__make} install-gcc install-target-libgcc \
+%{__make} install \
 	DESTDIR=$RPM_BUILD_ROOT
 
 install gcc/specs $RPM_BUILD_ROOT%{gcclib}
@@ -155,8 +154,8 @@ cp -ar $build_sysroot/mingw/include $RPM_BUILD_ROOT%{arch}
 make -C trunk/mingw-w64-crt install \
 	DESTDIR=$RPM_BUILD_ROOT
 
-mv $RPM_BUILD_ROOT%{_prefix}/x86_64-pc-mingw32/lib \
-	$RPM_BUILD_ROOT%{arch}
+mv $RPM_BUILD_ROOT%{_prefix}/x86_64-pc-mingw32/lib/* \
+	$RPM_BUILD_ROOT%{arch}/lib
 
 %if 0%{!?debug:1}
 %{target}-strip -g -R.note -R.comment $RPM_BUILD_ROOT%{gcclib}/libgcc.a
@@ -209,20 +208,24 @@ rm -rf $RPM_BUILD_ROOT
 %{_mandir}/man1/%{target}-gcov.1*
 %{arch}/include
 %{arch}/lib/*.a
+%if %{without bootstrap}
+%exclude %{arch}/include/c++
+%exclude %{arch}/lib/libstdc++.a
+%exclude %{arch}/lib/libsupc++.a
+%endif
 %{arch}/lib/*.o
 %dir %{arch}/mingw
 %{arch}/mingw/include
 
-%if 0
+%if %{without bootstrap}
 %files c++
 %defattr(644,root,root,755)
 %attr(755,root,root) %{_bindir}/%{target}-[cg]++
-%attr(755,root,root) %{arch}/bin/[cg]++
 %attr(755,root,root) %{gcclib}/cc1plus
 %{arch}/lib/libstdc++.a
 %{arch}/lib/libstdc++.la
 %{arch}/lib/libsupc++.a
 %{arch}/lib/libsupc++.la
-%{arch}/include/g++
+%{arch}/include/c++
 %{_mandir}/man1/%{target}-g++.1*
 %endif
