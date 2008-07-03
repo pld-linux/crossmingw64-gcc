@@ -19,6 +19,7 @@ Source0:	ftp://gcc.gnu.org/pub/gcc/releases/gcc-%{version}/gcc-%{version}.tar.bz
 Source1:	http://dl.sourceforge.net/mingw-w64/mingw-w64-snapshot-20080424.tar.bz2
 # Source1-md5:	e2eea49233efd0be3a40fc774abeb1a2
 Patch0:		%{name}-no_include64.patch
+Patch1:		%{name}-no_red_zone.patch
 BuildRequires:	autoconf
 BuildRequires:	automake
 BuildRequires:	bison
@@ -61,6 +62,7 @@ This package contains cross targeted g++ and (static) libstdc++.
 %prep
 %setup -q -n gcc-%{version} -a 1
 %patch0 -p1
+%patch1 -p1
 mkdir -p winsup/mingw
 cp -ar trunk/mingw-w64-headers/include winsup/mingw
 
@@ -104,7 +106,7 @@ TEXCONFIG=false \
 	--host=%{_target_platform} \
 	--target=%{target}
 
-%{__make} -j2
+%{__make}
 
 cd ..
 
