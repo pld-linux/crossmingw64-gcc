@@ -102,8 +102,6 @@ TEXCONFIG=false \
 	--disable-libssp \
 	--with-pkgversion="PLD-Linux" \
 	--with-bugurl="http://bugs.pld-linux.org" \
-	--build=%{_target_platform} \
-	--host=%{_target_platform} \
 	--target=%{target}
 
 %{__make}
@@ -156,13 +154,14 @@ cp -ar $build_sysroot/mingw/include $RPM_BUILD_ROOT%{arch}
 make -C trunk/mingw-w64-crt install \
 	DESTDIR=$RPM_BUILD_ROOT
 
-mv $RPM_BUILD_ROOT%{_prefix}/x86_64-pc-mingw32/lib/* \
-	$RPM_BUILD_ROOT%{arch}/lib
+find $RPM_BUILD_ROOT%{_prefix}/x86_64-pc-mingw32/lib -type f \
+	-exec mv "{}" "$RPM_BUILD_ROOT%{arch}/lib" ";"
 
 %if 0%{!?debug:1}
 %{target}-strip -g -R.note -R.comment $RPM_BUILD_ROOT%{gcclib}/libgcc.a
 %{target}-strip -g -R.note -R.comment $RPM_BUILD_ROOT%{gcclib}/libgcov.a
-%{target}-strip -g -R.note -R.comment $RPM_BUILD_ROOT%{arch}/lib/*.{a,o}
+find $RPM_BUILD_ROOT%{arch}/lib -type f -name '*.a' -o -name '*.o' \
+        -exec %{target}-strip -g -R.note -R.comment "{}" ";"
 %endif
 
 %clean
