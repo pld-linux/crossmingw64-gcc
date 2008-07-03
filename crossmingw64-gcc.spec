@@ -59,14 +59,13 @@ and libstdc++, all cross targeted to x86_64-mingw32.
 This package contains cross targeted g++ and (static) libstdc++.
 
 %prep
-%setup -q -n gcc-%{version}
+%setup -q -n gcc-%{version} -a 1
 %patch0 -p1
-mkdir winsup
-tar -xjf %{SOURCE1} -C winsup
-ln -s mingw-w64-headers winsup/trunk/mingw
+mkdir -p winsup/mingw
+cp -ar trunk/mingw-w64-headers/include winsup/mingw
 
 %build
-build_sysroot=`pwd`/winsup/trunk
+build_sysroot=`pwd`/winsup
 
 rm -rf BUILDDIR && install -d BUILDDIR && cd BUILDDIR
 
@@ -101,15 +100,40 @@ TEXCONFIG=false \
 	--disable-libssp \
 	--with-pkgversion="PLD-Linux" \
 	--with-bugurl="http://bugs.pld-linux.org" \
+	--build=%{_target_platform} \
+	--host=%{_target_platform} \
 	--target=%{target}
 
-%{__make} all
+%{__make} all-gcc -j2
+%{__make} all-target-libgcc
+
+cd ..
+
+cat <<EOF >cross-gcc
+#!/bin/sh
+p=`pwd`/BUILDDIR/gcc
+\${p}/xgcc -B\${p} \$@
+EOF
+chmod 755 cross-gcc
+
+export CC=`pwd`/cross-gcc
+
+cd trunk/mingw-w64-crt
+
+./configure \
+	--host=%{target} \
+	--prefix=%{_prefix} \
+	--with-sysroot=$build_sysroot \
+
+%{__make}
+
+cd -
 
 %install
-build_sysroot=`pwd`/winsup/trunk
+build_sysroot=`pwd`/winsup
 
 rm -rf $RPM_BUILD_ROOT
-install -d $RPM_BUILD_ROOT{%{_bindir},%{_datadir},%{arch}/mingw}
+install -d $RPM_BUILD_ROOT{%{_bindir},%{_datadir},%{arch}/mingw/include}
 
 cd BUILDDIR
 
@@ -120,19 +144,25 @@ install gcc/specs $RPM_BUILD_ROOT%{gcclib}
 
 cd ..
 
-rm $RPM_BUILD_ROOT%{_libdir}/libiberty.a
-
 gccdir=$RPM_BUILD_ROOT%{gcclib}
 mv $gccdir/include-fixed/{limits,syslimits}.h $gccdir/include
 rm -r $gccdir/include-fixed
 rm -r $gccdir/install-tools
 
+
+cp -ar $build_sysroot/mingw/include $RPM_BUILD_ROOT%{arch}
+
+make -C trunk/mingw-w64-crt install \
+	DESTDIR=$RPM_BUILD_ROOT
+
+mv $RPM_BUILD_ROOT%{_prefix}/x86_64-pc-mingw32/lib \
+	$RPM_BUILD_ROOT%{arch}
+
 %if 0%{!?debug:1}
 %{target}-strip -g -R.note -R.comment $RPM_BUILD_ROOT%{gcclib}/libgcc.a
 %{target}-strip -g -R.note -R.comment $RPM_BUILD_ROOT%{gcclib}/libgcov.a
+%{target}-strip -g -R.note -R.comment $RPM_BUILD_ROOT%{arch}/lib/*.{a,o}
 %endif
-
-cp -ar $build_sysroot/mingw-w64-headers/include $RPM_BUILD_ROOT%{arch}/mingw
 
 %clean
 rm -rf $RPM_BUILD_ROOT
@@ -177,6 +207,9 @@ rm -rf $RPM_BUILD_ROOT
 %{_mandir}/man1/%{target}-cpp.1*
 %{_mandir}/man1/%{target}-gcc.1*
 %{_mandir}/man1/%{target}-gcov.1*
+%{arch}/include
+%{arch}/lib/*.a
+%{arch}/lib/*.o
 %dir %{arch}/mingw
 %{arch}/mingw/include
 
