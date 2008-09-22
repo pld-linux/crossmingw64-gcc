@@ -1,0 +1,3169 @@
+diff -r ddadaee88373 gcc/c-format.c
+--- a/gcc/c-format.c	Thu May 29 20:27:38 2008 -0600
++++ b/gcc/c-format.c	Mon Jun 02 08:07:22 2008 -0600
+@@ -62,8 +62,7 @@
+ 		   gcc_diag_format_type, gcc_tdiag_format_type,
+ 		   gcc_cdiag_format_type,
+ 		   gcc_cxxdiag_format_type, gcc_gfc_format_type,
+-		   scanf_format_type, strftime_format_type,
+-		   strfmon_format_type, format_type_error = -1};
++		   format_type_error = -1};
+ 
+ typedef struct function_format_info
+ {
+@@ -80,7 +79,8 @@
+ 				 int flags, bool *no_add_attrs);
+ static bool get_constant (tree expr, unsigned HOST_WIDE_INT *value,
+ 			  int validated_p);
+-
++static const char *convert_format_name_to_system_name (const char *attr_name);
++static bool cmp_attribs (const char *tattr_name, const char *attr_name);
+ 
+ /* Handle a "format_arg" attribute; arguments as in
+    struct attribute_spec.handler.  */
+@@ -190,6 +190,8 @@
+   else
+     {
+       const char *p = IDENTIFIER_POINTER (format_type_id);
++
++      p = convert_format_name_to_system_name (p);
+ 
+       info->format_type = decode_format_type (p);
+ 
+@@ -715,7 +717,7 @@
+ /* This must be in the same order as enum format_type.  */
+ static const format_kind_info format_types_orig[] =
+ {
+-  { "printf",   printf_length_specs,  print_char_table, " +#0-'I", NULL,
++  { "gnu_printf",   printf_length_specs,  print_char_table, " +#0-'I", NULL,
+     printf_flag_specs, printf_flag_pairs,
+     FMT_FLAG_ARG_CONVERT|FMT_FLAG_DOLLAR_MULTIPLE|FMT_FLAG_USE_DOLLAR|FMT_FLAG_EMPTY_PREC_OK,
+     'w', 0, 'p', 0, 'L', 0,
+@@ -757,18 +759,18 @@
+     0, 0, 0, 0, 0, 0,
+     NULL, NULL
+   },
+-  { "scanf",    scanf_length_specs,   scan_char_table,  "*'I", NULL,
++  { "gnu_scanf",    scanf_length_specs,   scan_char_table,  "*'I", NULL,
+     scanf_flag_specs, scanf_flag_pairs,
+     FMT_FLAG_ARG_CONVERT|FMT_FLAG_SCANF_A_KLUDGE|FMT_FLAG_USE_DOLLAR|FMT_FLAG_ZERO_WIDTH_BAD|FMT_FLAG_DOLLAR_GAP_POINTER_OK,
+     'w', 0, 0, '*', 'L', 'm',
+     NULL, NULL
+   },
+-  { "strftime", NULL,                 time_char_table,  "_-0^#", "EO",
++  { "gnu_strftime", NULL,                 time_char_table,  "_-0^#", "EO",
+     strftime_flag_specs, strftime_flag_pairs,
+     FMT_FLAG_FANCY_PERCENT_OK, 'w', 0, 0, 0, 0, 0,
+     NULL, NULL
+   },
+-  { "strfmon",  strfmon_length_specs, monetary_char_table, "=^+(!-", NULL,
++  { "gnu_strfmon",  strfmon_length_specs, monetary_char_table, "=^+(!-", NULL,
+     strfmon_flag_specs, strfmon_flag_pairs,
+     FMT_FLAG_ARG_CONVERT, 'w', '#', 'p', 0, 'L', 0,
+     NULL, NULL
+@@ -847,6 +849,8 @@
+ {
+   int i;
+   int slen;
++
++  s = convert_format_name_to_system_name (s);
+   slen = strlen (s);
+   for (i = 0; i < n_format_types; i++)
+     {
+@@ -1775,11 +1779,12 @@
+       length_chars_std = STD_C89;
+       if (fli)
+ 	{
+-	  while (fli->name != 0 && fli->name[0] != *format_chars)
+-	    fli++;
++	  while (fli->name != 0 
++ 		 && strncmp (fli->name, format_chars, strlen (fli->name)))
++	      fli++;
+ 	  if (fli->name != 0)
+ 	    {
+-	      format_chars++;
++ 	      format_chars += strlen (fli->name);
+ 	      if (fli->double_name != 0 && fli->name[0] == *format_chars)
+ 		{
+ 		  format_chars++;
+@@ -2703,6 +2708,84 @@
+ extern const format_kind_info TARGET_FORMAT_TYPES[];
+ #endif
+ 
++#ifdef TARGET_OVERRIDES_FORMAT_ATTRIBUTES
++extern const target_ovr_attr TARGET_OVERRIDES_FORMAT_ATTRIBUTES[];
++#endif
++
++/* Attributes such as "printf" are equivalent to those such as
++   "gnu_printf" unless this is overridden by a target.  */
++static const target_ovr_attr gnu_target_overrides_format_attributes[] =
++{
++  { "gnu_printf",   "printf" },
++  { "gnu_scanf",    "scanf" },
++  { "gnu_strftime", "strftime" },
++  { "gnu_strfmon",  "strfmon" },
++  { NULL,           NULL }
++};
++
++/* Translate to unified attribute name. This is used in decode_format_type and
++   decode_format_attr. In attr_name the user specified argument is passed. It
++   returns the unified format name from TARGET_OVERRIDES_FORMAT_ATTRIBUTES
++   or the attr_name passed to this function, if there is no matching entry.  */
++static const char *
++convert_format_name_to_system_name (const char *attr_name)
++{
++  int i;
++
++  if (attr_name == NULL || *attr_name == 0
++      || strncmp (attr_name, "gcc_", 4) == 0)
++    return attr_name;
++
++#ifdef TARGET_OVERRIDES_FORMAT_ATTRIBUTES
++  /* Check if format attribute is overridden by target.  */
++  if (TARGET_OVERRIDES_FORMAT_ATTRIBUTES != NULL
++      && TARGET_OVERRIDES_FORMAT_ATTRIBUTES_COUNT > 0)
++    {
++      for (i = 0; i < TARGET_OVERRIDES_FORMAT_ATTRIBUTES_COUNT; ++i)
++        {
++          if (cmp_attribs (TARGET_OVERRIDES_FORMAT_ATTRIBUTES[i].named_attr_src,
++			   attr_name))
++            return attr_name;
++          if (cmp_attribs (TARGET_OVERRIDES_FORMAT_ATTRIBUTES[i].named_attr_dst,
++			   attr_name))
++            return TARGET_OVERRIDES_FORMAT_ATTRIBUTES[i].named_attr_src;
++        }
++    }
++#endif
++  /* Otherwise default to gnu format.  */
++  for (i = 0;
++       gnu_target_overrides_format_attributes[i].named_attr_src != NULL;
++       ++i)
++    {
++      if (cmp_attribs (gnu_target_overrides_format_attributes[i].named_attr_src,
++		       attr_name))
++        return attr_name;
++      if (cmp_attribs (gnu_target_overrides_format_attributes[i].named_attr_dst,
++		       attr_name))
++        return gnu_target_overrides_format_attributes[i].named_attr_src;
++    }
++
++  return attr_name;
++}
++
++/* Return true if TATTR_NAME and ATTR_NAME are the same format attribute,
++   counting "name" and "__name__" as the same, false otherwise.  */
++static bool
++cmp_attribs (const char *tattr_name, const char *attr_name)
++{
++  int alen = strlen (attr_name);
++  int slen = (tattr_name ? strlen (tattr_name) : 0);
++  if (alen > 4 && attr_name[0] == '_' && attr_name[1] == '_'
++      && attr_name[alen - 1] == '_' && attr_name[alen - 2] == '_')
++    {
++      attr_name += 2;
++      alen -= 4;
++    }
++  if (alen != slen || strncmp (tattr_name, attr_name, alen) != 0)
++    return false;
++  return true;
++}
++
+ /* Handle a "format" attribute; arguments as in
+    struct attribute_spec.handler.  */
+ tree
+@@ -2762,7 +2845,10 @@
+ 	}
+     }
+ 
+-  if (info.format_type == strftime_format_type && info.first_arg_num != 0)
++  /* Check if this is a strftime variant. Just for this variant
++     FMT_FLAG_ARG_CONVERT is not set.  */
++  if ((format_types[info.format_type].flags & (int) FMT_FLAG_ARG_CONVERT) == 0
++      && info.first_arg_num != 0)
+     {
+       error ("strftime formats cannot format arguments");
+       *no_add_attrs = true;
+diff -r ddadaee88373 gcc/c-format.h
+--- a/gcc/c-format.h	Thu May 29 20:27:38 2008 -0600
++++ b/gcc/c-format.h	Mon Jun 02 08:07:22 2008 -0600
+@@ -80,12 +80,13 @@
+      of whether length modifiers can occur (length_char_specs).  */
+ };
+ 
+-
+ /* Structure describing a length modifier supported in format checking, and
+    possibly a doubled version such as "hh".  */
+ typedef struct
+ {
+-  /* Name of the single-character length modifier.  */
++  /* Name of the single-character length modifier. If prefixed by
++     a zero character, it describes a multi character length
++     modifier, like I64, I32, etc.  */
+   const char *name;
+   /* Index into a format_char_info.types array.  */
+   enum format_lengths index;
+@@ -306,4 +307,16 @@
+ #define T_D128  &dfloat128_type_node
+ #define TEX_D128 { STD_EXT, "_Decimal128", T_D128 }
+ 
++/* Structure describing how format attributes such as "printf" are
++   interpreted as "gnu_printf" or "ms_printf" on a particular system.
++   TARGET_OVERRIDES_FORMAT_ATTRIBUTES is used to specify target-specific
++   defaults.  */
++typedef struct
++{
++  /* The name of the to be copied format attribute. */
++  const char *named_attr_src;
++  /* The name of the to be overridden format attribute. */
++  const char *named_attr_dst;
++} target_ovr_attr;
++
+ #endif /* GCC_C_FORMAT_H */
+diff -r ddadaee88373 gcc/config.gcc
+--- a/gcc/config.gcc	Thu May 29 20:27:38 2008 -0600
++++ b/gcc/config.gcc	Mon Jun 02 08:07:22 2008 -0600
+@@ -1365,8 +1365,8 @@
+ 	target_gtfiles="\$(srcdir)/config/i386/winnt.c"
+ 	extra_options="${extra_options} i386/cygming.opt"
+ 	extra_objs="winnt.o winnt-stubs.o"
+-	c_target_objs=cygwin2.o
+-	cxx_target_objs="cygwin2.o winnt-cxx.o"
++	c_target_objs="cygwin2.o msformat-c.o"
++	cxx_target_objs="cygwin2.o winnt-cxx.o msformat-c.o"
+ 	extra_gcc_objs=cygwin1.o
+ 	if test x$enable_threads = xyes; then
+ 		thread_file='posix'
+@@ -1379,7 +1379,8 @@
+ 	target_gtfiles="\$(srcdir)/config/i386/winnt.c"
+ 	extra_options="${extra_options} i386/cygming.opt"
+ 	extra_objs="winnt.o winnt-stubs.o"
+-	cxx_target_objs=winnt-cxx.o
++	c_target_objs="msformat-c.o"
++	cxx_target_objs="winnt-cxx.o msformat-c.o"
+ 	default_use_cxa_atexit=yes
+ 	case ${enable_threads} in
+ 	  "" | yes | win32)
+diff -r ddadaee88373 gcc/config/i386/mingw32.h
+--- a/gcc/config/i386/mingw32.h	Thu May 29 20:27:38 2008 -0600
++++ b/gcc/config/i386/mingw32.h	Mon Jun 02 08:07:22 2008 -0600
+@@ -143,6 +143,23 @@
+    to register C++ static destructors.  */
+ #define TARGET_CXX_USE_ATEXIT_FOR_CXA_ATEXIT hook_bool_void_true
+ 
++/* Contains a pointer to type target_ovr_attr defining the target specific
++   overrides of format attributes.  See c-format.h for structure
++   definition.  */
++#undef TARGET_OVERRIDES_FORMAT_ATTRIBUTES
++#define TARGET_OVERRIDES_FORMAT_ATTRIBUTES mingw_format_attribute_overrides
++
++/* Specify the count of elements in TARGET_OVERRIDES_ATTRIBUTE.  */
++#undef TARGET_OVERRIDES_FORMAT_ATTRIBUTES_COUNT
++#define TARGET_OVERRIDES_FORMAT_ATTRIBUTES_COUNT 3
++
++/* MS specific format attributes for ms_printf, ms_scanf, ms_strftime.  */
++#undef TARGET_FORMAT_TYPES
++#define TARGET_FORMAT_TYPES mingw_format_attributes
++
++#undef TARGET_N_FORMAT_TYPES
++#define TARGET_N_FORMAT_TYPES 3
++
+ /* JCR_SECTION works on mingw32.  */
+ #undef TARGET_USE_JCR_SECTION
+ #define TARGET_USE_JCR_SECTION 1
+diff -r ddadaee88373 gcc/config/i386/msformat-c.c
+--- /dev/null	Thu Jan 01 00:00:00 1970 +0000
++++ b/gcc/config/i386/msformat-c.c	Mon Jun 02 08:07:22 2008 -0600
+@@ -0,0 +1,175 @@
++/* Check calls to formatted I/O functions (-Wformat).
++   Copyright (C) 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999, 2000,
++   2001, 2002, 2003, 2004, 2005, 2007 Free Software Foundation, Inc.
++
++This file is part of GCC.
++
++GCC is free software; you can redistribute it and/or modify it under
++the terms of the GNU General Public License as published by the Free
++Software Foundation; either version 3, or (at your option) any later
++version.
++
++GCC is distributed in the hope that it will be useful, but WITHOUT ANY
++WARRANTY; without even the implied warranty of MERCHANTABILITY or
++FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
++for more details.
++
++You should have received a copy of the GNU General Public License
++along with GCC; see the file COPYING3.  If not see
++<http://www.gnu.org/licenses/>.  */
++
++#include "config.h"
++#include "system.h"
++#include "coretypes.h"
++#include "tm.h"
++#include "tree.h"
++#include "flags.h"
++#include "c-common.h"
++#include "toplev.h"
++#include "intl.h"
++#include "diagnostic.h"
++#include "langhooks.h"
++#include "c-format.h"
++#include "alloc-pool.h"
++
++/* Mingw specific format attributes ms_printf, ms_scanf, and ms_strftime.  */
++
++static const format_length_info ms_printf_length_specs[] =
++{
++  { "h", FMT_LEN_h, STD_C89, NULL, 0, 0 },
++  { "l", FMT_LEN_l, STD_C89, NULL, 0, 0 },
++  { "I32", FMT_LEN_l, STD_EXT, NULL, 0, 0 },
++  { "I64", FMT_LEN_ll, STD_EXT, NULL, 0, 0 },
++  { "I", FMT_LEN_L, STD_EXT, NULL, 0, 0 },
++  { NULL, 0, 0, NULL, 0, 0 }
++};
++
++static const format_flag_spec ms_printf_flag_specs[] =
++{
++  { ' ',  0, 0, N_("' ' flag"),        N_("the ' ' printf flag"),              STD_C89 },
++  { '+',  0, 0, N_("'+' flag"),        N_("the '+' printf flag"),              STD_C89 },
++  { '#',  0, 0, N_("'#' flag"),        N_("the '#' printf flag"),              STD_C89 },
++  { '0',  0, 0, N_("'0' flag"),        N_("the '0' printf flag"),              STD_C89 },
++  { '-',  0, 0, N_("'-' flag"),        N_("the '-' printf flag"),              STD_C89 },
++  { '\'', 0, 0, N_("''' flag"),        N_("the ''' printf flag"),              STD_EXT },
++  { 'w',  0, 0, N_("field width"),     N_("field width in printf format"),     STD_C89 },
++  { 'p',  0, 0, N_("precision"),       N_("precision in printf format"),       STD_C89 },
++  { 'L',  0, 0, N_("length modifier"), N_("length modifier in printf format"), STD_C89 },
++  { 0, 0, 0, NULL, NULL, 0 }
++};
++
++static const format_flag_pair ms_printf_flag_pairs[] =
++{
++  { ' ', '+', 1, 0   },
++  { '0', '-', 1, 0   }, { '0', 'p', 1, 'i' },
++  { 0, 0, 0, 0 }
++};
++
++static const format_flag_spec ms_scanf_flag_specs[] =
++{
++  { '*',  0, 0, N_("assignment suppression"), N_("the assignment suppression scanf feature"), STD_C89 },
++  { 'a',  0, 0, N_("'a' flag"),               N_("the 'a' scanf flag"),                       STD_EXT },
++  { 'w',  0, 0, N_("field width"),            N_("field width in scanf format"),              STD_C89 },
++  { 'L',  0, 0, N_("length modifier"),        N_("length modifier in scanf format"),          STD_C89 },
++  { '\'', 0, 0, N_("''' flag"),               N_("the ''' scanf flag"),                       STD_EXT },
++  { 0, 0, 0, NULL, NULL, 0 }
++};
++
++static const format_flag_pair ms_scanf_flag_pairs[] =
++{
++  { '*', 'L', 0, 0 },
++  { 0, 0, 0, 0 }
++};
++
++static const format_flag_spec ms_strftime_flag_specs[] =
++{
++  { '#', 0,   0, N_("'#' flag"),     N_("the '#' strftime flag"),          STD_EXT },
++  { 0, 0, 0, NULL, NULL, 0 }
++};
++
++static const format_flag_pair ms_strftime_flag_pairs[] =
++{
++  { 0, 0, 0, 0 }
++};
++
++static const format_char_info ms_print_char_table[] =
++{
++  /* C89 conversion specifiers.  */
++  { "di",  0, STD_C89, { T89_I,   BADLEN,  T89_S,   T89_L,   T9L_LL,  T99_SST,  BADLEN, BADLEN,  BADLEN,  BADLEN,  BADLEN,  BADLEN  }, "-wp0 +'",  "i",  NULL },
++  { "oxX", 0, STD_C89, { T89_UI,  BADLEN,  T89_US,  T89_UL,  T9L_ULL, T99_ST, BADLEN, BADLEN, BADLEN, BADLEN,  BADLEN,  BADLEN }, "-wp0#",     "i",  NULL },
++  { "u",   0, STD_C89, { T89_UI,  BADLEN,  T89_US,  T89_UL,  T9L_ULL, T99_ST, BADLEN, BADLEN, BADLEN, BADLEN,  BADLEN,  BADLEN }, "-wp0'",    "i",  NULL },
++  { "fgG", 0, STD_C89, { T89_D,   BADLEN,  BADLEN,  T99_D,   BADLEN,  BADLEN,  BADLEN,  BADLEN,  BADLEN,  BADLEN, BADLEN, BADLEN }, "-wp0 +#'", "",   NULL },
++  { "eE",  0, STD_C89, { T89_D,   BADLEN,  BADLEN,  T99_D,   BADLEN,  BADLEN,  BADLEN,  BADLEN,  BADLEN,  BADLEN, BADLEN, BADLEN }, "-wp0 +#",  "",   NULL },
++  { "c",   0, STD_C89, { T89_I,   BADLEN,  T89_S,  T94_WI,  BADLEN,  BADLEN,  BADLEN,  BADLEN,  BADLEN,  BADLEN,  BADLEN,  BADLEN }, "-w",        "",   NULL },
++  { "s",   1, STD_C89, { T89_C,   BADLEN,  T89_S,  T94_W,   BADLEN,  BADLEN,  BADLEN,  BADLEN,  BADLEN,  BADLEN,  BADLEN,  BADLEN }, "-wp",       "cR", NULL },
++  { "p",   1, STD_C89, { T89_V,   BADLEN,  BADLEN,  BADLEN,  BADLEN,  BADLEN,  BADLEN,  BADLEN,  BADLEN,  BADLEN,  BADLEN,  BADLEN }, "-w",        "c",  NULL },
++  { "n",   1, STD_C89, { T89_I,   BADLEN,  T89_S,   T89_L,   T9L_LL,  BADLEN,  BADLEN, BADLEN,  T99_IM,  BADLEN,  BADLEN,  BADLEN }, "",          "W",  NULL },
++  /* X/Open conversion specifiers.  */
++  { "C",   0, STD_EXT, { TEX_WI,  BADLEN,  T89_S,  BADLEN,  BADLEN,  BADLEN,  BADLEN,  BADLEN,  BADLEN,  BADLEN,  BADLEN,  BADLEN }, "-w",        "",   NULL },
++  { "S",   1, STD_EXT, { TEX_W,   BADLEN,  T89_S,  BADLEN,  BADLEN,  BADLEN,  BADLEN,  BADLEN,  BADLEN,  BADLEN,  BADLEN,  BADLEN }, "-wp",       "R",  NULL },
++  { NULL,  0, 0, NOLENGTHS, NULL, NULL, NULL }
++};
++
++static const format_char_info ms_scan_char_table[] =
++{
++  /* C89 conversion specifiers.  */
++  { "di",    1, STD_C89, { T89_I,   BADLEN,  T89_S,   T89_L,   T9L_LL,  T99_SST,  BADLEN, BADLEN,  BADLEN,  BADLEN,  BADLEN,  BADLEN }, "*w'", "W",   NULL },
++  { "u",     1, STD_C89, { T89_UI,  BADLEN,  T89_US,  T89_UL,  T9L_ULL, T99_ST, BADLEN,  BADLEN, BADLEN, BADLEN,  BADLEN,  BADLEN }, "*w'", "W",   NULL },
++  { "oxX",   1, STD_C89, { T89_UI,  BADLEN,  T89_US,  T89_UL,  T9L_ULL, T99_ST, BADLEN,  BADLEN, BADLEN, BADLEN,  BADLEN,  BADLEN }, "*w",   "W",   NULL },
++  { "efgEG", 1, STD_C89, { T89_F,   BADLEN,  BADLEN,  T89_D,   BADLEN,  BADLEN,  BADLEN,  BADLEN,  BADLEN,  BADLEN, BADLEN, BADLEN }, "*w'",  "W",   NULL },
++  { "c",     1, STD_C89, { T89_C,   BADLEN,  T89_S,  T94_W,   BADLEN,  BADLEN,  BADLEN,  BADLEN,  BADLEN,  BADLEN,  BADLEN,  BADLEN }, "*w",   "cW",  NULL },
++  { "s",     1, STD_C89, { T89_C,   BADLEN,  T89_S,  T94_W,   BADLEN,  BADLEN,  BADLEN,  BADLEN,  BADLEN,  BADLEN,  BADLEN,  BADLEN }, "*aw",  "cW",  NULL },
++  { "[",     1, STD_C89, { T89_C,   BADLEN,  BADLEN,  T94_W,   BADLEN,  BADLEN,  BADLEN,  BADLEN,  BADLEN,  BADLEN,  BADLEN,  BADLEN }, "*aw",  "cW[", NULL },
++  { "p",     2, STD_C89, { T89_V,   BADLEN,  BADLEN,  BADLEN,  BADLEN,  BADLEN,  BADLEN,  BADLEN,  BADLEN,  BADLEN,  BADLEN,  BADLEN }, "*w",   "W",   NULL },
++  { "n",     1, STD_C89, { T89_I,   BADLEN,  T89_S,   T89_L,   T9L_LL,  BADLEN,  BADLEN, BADLEN,  BADLEN,  BADLEN,  BADLEN,  BADLEN }, "",     "W",   NULL },
++  /* X/Open conversion specifiers.  */
++  { "C",     1, STD_EXT, { TEX_W,   BADLEN,  T89_S,  BADLEN,  BADLEN,  BADLEN,  BADLEN,  BADLEN,  BADLEN,  BADLEN,  BADLEN,  BADLEN }, "*w",   "W",   NULL },
++  { "S",     1, STD_EXT, { TEX_W,   BADLEN,  T89_S,  BADLEN,  BADLEN,  BADLEN,  BADLEN,  BADLEN,  BADLEN,  BADLEN,  BADLEN,  BADLEN }, "*aw",  "W",   NULL },
++  { NULL, 0, 0, NOLENGTHS, NULL, NULL, NULL }
++};
++
++static const format_char_info ms_time_char_table[] =
++{
++  /* C89 conversion specifiers.  */
++  { "ABZab",		0, STD_C89, NOLENGTHS, "#",     "",   NULL },
++  { "cx",		0, STD_C89, NOLENGTHS, "#",      "3",  NULL },
++  { "HIMSUWdmw",	0, STD_C89, NOLENGTHS, "#",  "",   NULL },
++  { "j",		0, STD_C89, NOLENGTHS, "#",  "",  NULL },
++  { "p",		0, STD_C89, NOLENGTHS, "#",      "",   NULL },
++  { "X",		0, STD_C89, NOLENGTHS, "#",      "",   NULL },
++  { "y",		0, STD_C89, NOLENGTHS, "#", "4",  NULL },
++  { "Y",		0, STD_C89, NOLENGTHS, "#", "",  NULL },
++  { "%",		0, STD_C89, NOLENGTHS, "",       "",   NULL },
++  /* C99 conversion specifiers.  */
++  { "z",		0, STD_C99, NOLENGTHS, "#",      "",  NULL },
++  { NULL,		0, 0, NOLENGTHS, NULL, NULL, NULL }
++};
++
++const format_kind_info mingw_format_attributes[3] =
++{
++  { "ms_printf",   ms_printf_length_specs,  ms_print_char_table, " +#0-'", NULL,
++    ms_printf_flag_specs, ms_printf_flag_pairs,
++    FMT_FLAG_ARG_CONVERT|FMT_FLAG_DOLLAR_MULTIPLE|FMT_FLAG_USE_DOLLAR|FMT_FLAG_EMPTY_PREC_OK,
++    'w', 0, 'p', 0, 'L', 0,
++    &integer_type_node, &integer_type_node
++  },
++  { "ms_scanf",    ms_printf_length_specs,   ms_scan_char_table,  "*'", NULL,
++    ms_scanf_flag_specs, ms_scanf_flag_pairs,
++    FMT_FLAG_ARG_CONVERT|FMT_FLAG_SCANF_A_KLUDGE|FMT_FLAG_USE_DOLLAR|FMT_FLAG_ZERO_WIDTH_BAD|FMT_FLAG_DOLLAR_GAP_POINTER_OK,
++    'w', 0, 0, '*', 'L', 0,
++    NULL, NULL
++  },
++  { "ms_strftime", NULL,                 ms_time_char_table,  "", "#",
++    ms_strftime_flag_specs, ms_strftime_flag_pairs,
++    FMT_FLAG_FANCY_PERCENT_OK, 0, 0, 0, 0, 0, 0,
++    NULL, NULL
++  }
++};
++
++/* Default overrides for printf, scanf and strftime.  */
++const target_ovr_attr mingw_format_attribute_overrides[4] =
++{
++  { "ms_printf", "printf" },
++  { "ms_scanf", "scanf" },
++  { "ms_strftime", "strftime" }
++};
+diff -r ddadaee88373 gcc/config/i386/t-cygming
+--- a/gcc/config/i386/t-cygming	Thu May 29 20:27:38 2008 -0600
++++ b/gcc/config/i386/t-cygming	Mon Jun 02 08:07:22 2008 -0600
+@@ -29,4 +29,10 @@
+ 	$(CC) -c $(ALL_CFLAGS) $(ALL_CPPFLAGS) $(INCLUDES) \
+ 	$(srcdir)/config/i386/winnt-stubs.c
+ 
++msformat-c.o: $(srcdir)/config/i386/msformat-c.c $(CONFIG_H) $(SYSTEM_H) coretypes.h \
++  $(TM_H) $(RTL_H) $(REGS_H) hard-reg-set.h output.h $(TREE_H) flags.h \
++  $(TM_P_H) toplev.h $(HASHTAB_H) $(GGC_H)
++	$(CC) -c $(ALL_CFLAGS) $(ALL_CPPFLAGS) $(INCLUDES) \
++	$(srcdir)/config/i386/msformat-c.c
++
+ STMP_FIXINC=stmp-fixinc
+diff -r ddadaee88373 gcc/doc/extend.texi
+--- a/gcc/doc/extend.texi	Thu May 29 20:27:38 2008 -0600
++++ b/gcc/doc/extend.texi	Mon Jun 02 08:07:22 2008 -0600
+@@ -2204,13 +2204,22 @@
+ @code{my_format}.
+ 
+ The parameter @var{archetype} determines how the format string is
+-interpreted, and should be @code{printf}, @code{scanf}, @code{strftime}
+-or @code{strfmon}.  (You can also use @code{__printf__},
+-@code{__scanf__}, @code{__strftime__} or @code{__strfmon__}.)  The
+-parameter @var{string-index} specifies which argument is the format
+-string argument (starting from 1), while @var{first-to-check} is the
+-number of the first argument to check against the format string.  For
+-functions where the arguments are not available to be checked (such as
++interpreted, and should be @code{printf}, @code{scanf}, @code{strftime},
++@code{gnu_printf}, @code{gnu_scanf}, @code{gnu_strftime} or
++@code{strfmon}.  (You can also use @code{__printf__},
++@code{__scanf__}, @code{__strftime__} or @code{__strfmon__}.)  On
++MinGW targets, @code{ms_printf}, @code{ms_scanf}, and
++@code{ms_strftime} are also present.
++@var{archtype} values such as @code{printf} refer to the formats accepted
++by the system's C run-time library, while @code{gnu_} values always refer
++to the formats accepted by the GNU C Library.  On Microsoft Windows
++targets, @code{ms_} values refer to the formats accepted by the
++@file{msvcrt.dll} library.
++The parameter @var{string-index}
++specifies which argument is the format string argument (starting
++from 1), while @var{first-to-check} is the number of the first
++argument to check against the format string.  For functions
++where the arguments are not available to be checked (such as
+ @code{vprintf}), specify the third parameter as zero.  In this case the
+ compiler only checks the format string for consistency.  For
+ @code{strftime} formats, the third parameter is required to be zero.
+diff -r ddadaee88373 gcc/doc/tm.texi
+--- a/gcc/doc/tm.texi	Thu May 29 20:27:38 2008 -0600
++++ b/gcc/doc/tm.texi	Mon Jun 02 08:07:22 2008 -0600
+@@ -10319,6 +10319,18 @@
+ @code{TARGET_FORMAT_TYPES}.
+ @end defmac
+ 
++@defmac TARGET_OVERRIDES_FORMAT_ATTRIBUTES
++If defined, this macro is the name of a global variable containing
++target-specific format overrides for the @option{-Wformat} option. The
++default is to have no target-specific format overrides. If defined,
++@code{TARGET_FORMAT_TYPES} must be defined, too.
++@end defmac
++
++@defmac TARGET_OVERRIDES_FORMAT_ATTRIBUTES_COUNT
++If defined, this macro specifies the number of entries in
++@code{TARGET_OVERRIDES_FORMAT_ATTRIBUTES}.
++@end defmac
++
+ @deftypefn {Target Hook} bool TARGET_RELAXED_ORDERING
+ If set to @code{true}, means that the target's memory model does not
+ guarantee that loads which do not depend on one another will access
+diff -r ddadaee88373 gcc/pretty-print.c
+--- a/gcc/pretty-print.c	Thu May 29 20:27:38 2008 -0600
++++ b/gcc/pretty-print.c	Mon Jun 02 08:07:22 2008 -0600
+@@ -50,7 +50,7 @@
+         break;                                               \
+                                                              \
+       case 2:                                                \
+-        pp_scalar (PP, "%ll" F, va_arg (ARG, long long T));  \
++        pp_scalar (PP, "%" HOST_LONG_LONG_FORMAT F, va_arg (ARG, long long T));  \
+         break;                                               \
+                                                              \
+       default:                                               \
+diff -r ddadaee88373 gcc/testsuite/gcc.dg/format/attr-1.c
+--- a/gcc/testsuite/gcc.dg/format/attr-1.c	Thu May 29 20:27:38 2008 -0600
++++ b/gcc/testsuite/gcc.dg/format/attr-1.c	Mon Jun 02 08:07:22 2008 -0600
+@@ -3,7 +3,8 @@
+ /* { dg-do compile } */
+ /* { dg-options "-std=gnu99 -Wformat" } */
+ 
++#define DONT_GNU_PROTOTYPE
+ #include "format.h"
+ 
+-extern void foo0 (const char *) __attribute__((__format__(__strftime__, 1, 0)));
+-extern void foo1 (const char *, ...) __attribute__((__format__(__strftime__, 1, 2))); /* { dg-error "cannot format" "strftime first_arg_num != 0" } */
++extern void foo0 (const char *) __attribute__((__format__(gnu_attr___strftime__, 1, 0)));
++extern void foo1 (const char *, ...) __attribute__((__format__(gnu_attr___strftime__, 1, 2))); /* { dg-error "cannot format" "strftime first_arg_num != 0" } */
+diff -r ddadaee88373 gcc/testsuite/gcc.dg/format/attr-2.c
+--- a/gcc/testsuite/gcc.dg/format/attr-2.c	Thu May 29 20:27:38 2008 -0600
++++ b/gcc/testsuite/gcc.dg/format/attr-2.c	Mon Jun 02 08:07:22 2008 -0600
+@@ -3,22 +3,23 @@
+ /* { dg-do compile } */
+ /* { dg-options "-std=gnu99 -Wformat" } */
+ 
++#define DONT_GNU_PROTOTYPE
+ #include "format.h"
+ 
+-extern void tformatprintf (const char *, ...) __attribute__((format(printf, 1, 2)));
+-extern void tformat__printf__ (const char *, ...) __attribute__((format(__printf__, 1, 2)));
+-extern void tformatscanf (const char *, ...) __attribute__((format(scanf, 1, 2)));
+-extern void tformat__scanf__ (const char *, ...) __attribute__((format(__scanf__, 1, 2)));
+-extern void tformatstrftime (const char *) __attribute__((format(strftime, 1, 0)));
+-extern void tformat__strftime__ (const char *) __attribute__((format(__strftime__, 1, 0)));
++extern void tformatprintf (const char *, ...) __attribute__((format(gnu_attr_printf, 1, 2)));
++extern void tformat__printf__ (const char *, ...) __attribute__((format(gnu_attr___printf__, 1, 2)));
++extern void tformatscanf (const char *, ...) __attribute__((format(gnu_attr_scanf, 1, 2)));
++extern void tformat__scanf__ (const char *, ...) __attribute__((format(gnu_attr___scanf__, 1, 2)));
++extern void tformatstrftime (const char *) __attribute__((format(gnu_attr_strftime, 1, 0)));
++extern void tformat__strftime__ (const char *) __attribute__((format(gnu_attr___strftime__, 1, 0)));
+ extern void tformatstrfmon (const char *, ...) __attribute__((format(strfmon, 1, 2)));
+ extern void tformat__strfmon__ (const char *, ...) __attribute__((format(__strfmon__, 1, 2)));
+-extern void t__format__printf (const char *, ...) __attribute__((__format__(printf, 1, 2)));
+-extern void t__format____printf__ (const char *, ...) __attribute__((__format__(__printf__, 1, 2)));
+-extern void t__format__scanf (const char *, ...) __attribute__((__format__(scanf, 1, 2)));
+-extern void t__format____scanf__ (const char *, ...) __attribute__((__format__(__scanf__, 1, 2)));
+-extern void t__format__strftime (const char *) __attribute__((__format__(strftime, 1, 0)));
+-extern void t__format____strftime__ (const char *) __attribute__((__format__(__strftime__, 1, 0)));
++extern void t__format__printf (const char *, ...) __attribute__((__format__(gnu_attr_printf, 1, 2)));
++extern void t__format____printf__ (const char *, ...) __attribute__((__format__(gnu_attr___printf__, 1, 2)));
++extern void t__format__scanf (const char *, ...) __attribute__((__format__(gnu_attr_scanf, 1, 2)));
++extern void t__format____scanf__ (const char *, ...) __attribute__((__format__(gnu_attr___scanf__, 1, 2)));
++extern void t__format__strftime (const char *) __attribute__((__format__(gnu_attr_strftime, 1, 0)));
++extern void t__format____strftime__ (const char *) __attribute__((__format__(gnu_attr___strftime__, 1, 0)));
+ extern void t__format__strfmon (const char *, ...) __attribute__((__format__(strfmon, 1, 2)));
+ extern void t__format____strfmon__ (const char *, ...) __attribute__((__format__(__strfmon__, 1, 2)));
+ 
+diff -r ddadaee88373 gcc/testsuite/gcc.dg/format/attr-3.c
+--- a/gcc/testsuite/gcc.dg/format/attr-3.c	Thu May 29 20:27:38 2008 -0600
++++ b/gcc/testsuite/gcc.dg/format/attr-3.c	Mon Jun 02 08:07:22 2008 -0600
+@@ -3,20 +3,21 @@
+ /* { dg-do compile } */
+ /* { dg-options "-std=gnu99 -Wformat" } */
+ 
++#define DONT_GNU_PROTOTYPE
+ #include "format.h"
+ 
+ /* Proper uses of the attributes.  */
+-extern void fa0 (const char *, ...) __attribute__((format(printf, 1, 2)));
+-extern void fa1 (char *, ...) __attribute__((format(printf, 1, 2)));
++extern void fa0 (const char *, ...) __attribute__((format(gnu_attr_printf, 1, 2)));
++extern void fa1 (char *, ...) __attribute__((format(gnu_attr_printf, 1, 2)));
+ extern char *fa2 (const char *) __attribute__((format_arg(1)));
+ extern char *fa3 (char *) __attribute__((format_arg(1)));
+ 
+ /* Uses with too few or too many arguments.  */
+ extern void fb0 (const char *, ...) __attribute__((format)); /* { dg-error "wrong number of arguments" "bad format" } */
+ extern void fb1 (const char *, ...) __attribute__((format())); /* { dg-error "wrong number of arguments" "bad format" } */
+-extern void fb2 (const char *, ...) __attribute__((format(printf))); /* { dg-error "wrong number of arguments" "bad format" } */
+-extern void fb3 (const char *, ...) __attribute__((format(printf, 1))); /* { dg-error "wrong number of arguments" "bad format" } */
+-extern void fb4 (const char *, ...) __attribute__((format(printf, 1, 2, 3))); /* { dg-error "wrong number of arguments" "bad format" } */
++extern void fb2 (const char *, ...) __attribute__((format(gnu_attr_printf))); /* { dg-error "wrong number of arguments" "bad format" } */
++extern void fb3 (const char *, ...) __attribute__((format(gnu_attr_printf, 1))); /* { dg-error "wrong number of arguments" "bad format" } */
++extern void fb4 (const char *, ...) __attribute__((format(gnu_attr_printf, 1, 2, 3))); /* { dg-error "wrong number of arguments" "bad format" } */
+ 
+ extern void fc1 (const char *) __attribute__((format_arg)); /* { dg-error "wrong number of arguments" "bad format_arg" } */
+ extern void fc2 (const char *) __attribute__((format_arg())); /* { dg-error "wrong number of arguments" "bad format_arg" } */
+@@ -25,9 +26,9 @@
+ /* These attributes presently only apply to declarations, not to types.
+    Eventually, they should be usable with declarators for function types
+    anywhere, but still not with structure/union/enum types.  */
+-struct s0 { int i; } __attribute__((format(printf, 1, 2))); /* { dg-error "does not apply|only applies" "format on struct" } */
+-union u0 { int i; } __attribute__((format(printf, 1, 2))); /* { dg-error "does not apply|only applies" "format on union" } */
+-enum e0 { E0V0 } __attribute__((format(printf, 1, 2))); /* { dg-error "does not apply|only applies" "format on enum" } */
++struct s0 { int i; } __attribute__((format(gnu_attr_printf, 1, 2))); /* { dg-error "does not apply|only applies" "format on struct" } */
++union u0 { int i; } __attribute__((format(gnu_attr_printf, 1, 2))); /* { dg-error "does not apply|only applies" "format on union" } */
++enum e0 { E0V0 } __attribute__((format(gnu_attr_printf, 1, 2))); /* { dg-error "does not apply|only applies" "format on enum" } */
+ 
+ struct s1 { int i; } __attribute__((format_arg(1))); /* { dg-error "does not apply|only applies" "format_arg on struct" } */
+ union u1 { int i; } __attribute__((format_arg(1))); /* { dg-error "does not apply|only applies" "format_arg on union" } */
+@@ -38,28 +39,28 @@
+ extern void fe1 (const char *, ...) __attribute__((format(nosuch, 1, 2))); /* { dg-warning "format function type" "unknown format" } */
+ 
+ /* Both the numbers must be integer constant expressions.  */
+-extern void ff0 (const char *, ...) __attribute__((format(printf, 3-2, (long long)(10/5))));
++extern void ff0 (const char *, ...) __attribute__((format(gnu_attr_printf, 3-2, (long long)(10/5))));
+ int foo;
+-extern void ff1 (const char *, ...) __attribute__((format(printf, foo, 10/5))); /* { dg-error "invalid operand" "bad number" } */
+-extern void ff2 (const char *, ...) __attribute__((format(printf, 3-2, foo))); /* { dg-error "invalid operand" "bad number" } */
++extern void ff1 (const char *, ...) __attribute__((format(gnu_attr_printf, foo, 10/5))); /* { dg-error "invalid operand" "bad number" } */
++extern void ff2 (const char *, ...) __attribute__((format(gnu_attr_printf, 3-2, foo))); /* { dg-error "invalid operand" "bad number" } */
+ extern char *ff3 (const char *) __attribute__((format_arg(3-2)));
+ extern char *ff4 (const char *) __attribute__((format_arg(foo))); /* { dg-error "invalid operand" "bad format_arg number" } */
+ 
+ /* The format string argument must precede the arguments to be formatted.
+    This includes if no parameter types are specified (which is not valid ISO
+    C for variadic functions).  */
+-extern void fg0 () __attribute__((format(printf, 1, 2)));
+-extern void fg1 () __attribute__((format(printf, 1, 0)));
+-extern void fg2 () __attribute__((format(printf, 1, 1))); /* { dg-error "follows" "bad number order" } */
+-extern void fg3 () __attribute__((format(printf, 2, 1))); /* { dg-error "follows" "bad number order" } */
++extern void fg0 () __attribute__((format(gnu_attr_printf, 1, 2)));
++extern void fg1 () __attribute__((format(gnu_attr_printf, 1, 0)));
++extern void fg2 () __attribute__((format(gnu_attr_printf, 1, 1))); /* { dg-error "follows" "bad number order" } */
++extern void fg3 () __attribute__((format(gnu_attr_printf, 2, 1))); /* { dg-error "follows" "bad number order" } */
+ 
+ /* The format string argument must be a string type, and the arguments to
+    be formatted must be the "...".  */
+-extern void fh0 (int, ...) __attribute__((format(printf, 1, 2))); /* { dg-error "not a string" "format int string" } */
+-extern void fh1 (signed char *, ...) __attribute__((format(printf, 1, 2))); /* { dg-error "not a string" "signed char string" } */
+-extern void fh2 (unsigned char *, ...) __attribute__((format(printf, 1, 2))); /* { dg-error "not a string" "unsigned char string" } */
+-extern void fh3 (const char *, ...) __attribute__((format(printf, 1, 3))); /* { dg-error "is not" "not ..." } */
+-extern void fh4 (const char *, int, ...) __attribute__((format(printf, 1, 2))); /* { dg-error "is not" "not ..." } */
++extern void fh0 (int, ...) __attribute__((format(gnu_attr_printf, 1, 2))); /* { dg-error "not a string" "format int string" } */
++extern void fh1 (signed char *, ...) __attribute__((format(gnu_attr_printf, 1, 2))); /* { dg-error "not a string" "signed char string" } */
++extern void fh2 (unsigned char *, ...) __attribute__((format(gnu_attr_printf, 1, 2))); /* { dg-error "not a string" "unsigned char string" } */
++extern void fh3 (const char *, ...) __attribute__((format(gnu_attr_printf, 1, 3))); /* { dg-error "is not" "not ..." } */
++extern void fh4 (const char *, int, ...) __attribute__((format(gnu_attr_printf, 1, 2))); /* { dg-error "is not" "not ..." } */
+ 
+ /* format_arg formats must take and return a string.  */
+ extern char *fi0 (int) __attribute__((format_arg(1))); /* { dg-error "not a string" "format_arg int string" } */
+diff -r ddadaee88373 gcc/testsuite/gcc.dg/format/attr-4.c
+--- a/gcc/testsuite/gcc.dg/format/attr-4.c	Thu May 29 20:27:38 2008 -0600
++++ b/gcc/testsuite/gcc.dg/format/attr-4.c	Mon Jun 02 08:07:22 2008 -0600
+@@ -4,12 +4,13 @@
+ /* { dg-do compile } */
+ /* { dg-options "-std=gnu99 -Wformat" } */
+ 
++#define DONT_GNU_PROTOTYPE
+ #include "format.h"
+ 
+-extern __attribute__((format(printf, 1, 2))) void tformatprintf0 (const char *, ...);
+-extern void __attribute__((format(printf, 1, 2))) tformatprintf1 (const char *, ...);
+-extern void foo (void), __attribute__((format(printf, 1, 2))) tformatprintf2 (const char *, ...);
+-extern __attribute__((noreturn)) void bar (void), __attribute__((format(printf, 1, 2))) tformatprintf3 (const char *, ...);
++extern __attribute__((format(gnu_attr_printf, 1, 2))) void tformatprintf0 (const char *, ...);
++extern void __attribute__((format(gnu_attr_printf, 1, 2))) tformatprintf1 (const char *, ...);
++extern void foo (void), __attribute__((format(gnu_attr_printf, 1, 2))) tformatprintf2 (const char *, ...);
++extern __attribute__((noreturn)) void bar (void), __attribute__((format(gnu_attr_printf, 1, 2))) tformatprintf3 (const char *, ...);
+ 
+ void
+ baz (int i, int *ip, double d)
+diff -r ddadaee88373 gcc/testsuite/gcc.dg/format/attr-7.c
+--- a/gcc/testsuite/gcc.dg/format/attr-7.c	Thu May 29 20:27:38 2008 -0600
++++ b/gcc/testsuite/gcc.dg/format/attr-7.c	Mon Jun 02 08:07:23 2008 -0600
+@@ -3,12 +3,13 @@
+ /* { dg-do compile } */
+ /* { dg-options "-std=gnu99 -Wformat" } */
+ 
++#define DONT_GNU_PROTOTYPE
+ #include "format.h"
+ 
+-__attribute__((format(printf, 1, 2))) void (*tformatprintf0) (const char *, ...);
+-void (*tformatprintf1) (const char *, ...) __attribute__((format(printf, 1, 2)));
+-void (__attribute__((format(printf, 1, 2))) *tformatprintf2) (const char *, ...);
+-void (__attribute__((format(printf, 1, 2))) ****tformatprintf3) (const char *, ...);
++__attribute__((format(gnu_attr_printf, 1, 2))) void (*tformatprintf0) (const char *, ...);
++void (*tformatprintf1) (const char *, ...) __attribute__((format(gnu_attr_printf, 1, 2)));
++void (__attribute__((format(gnu_attr_printf, 1, 2))) *tformatprintf2) (const char *, ...);
++void (__attribute__((format(gnu_attr_printf, 1, 2))) ****tformatprintf3) (const char *, ...);
+ 
+ char * (__attribute__((format_arg(1))) *tformat_arg) (const char *);
+ 
+diff -r ddadaee88373 gcc/testsuite/gcc.dg/format/c90-printf-3.c
+--- a/gcc/testsuite/gcc.dg/format/c90-printf-3.c	Thu May 29 20:27:38 2008 -0600
++++ b/gcc/testsuite/gcc.dg/format/c90-printf-3.c	Mon Jun 02 08:07:23 2008 -0600
+@@ -3,7 +3,7 @@
+    do not.
+ */
+ /* Origin: Joseph Myers <jsm28@cam.ac.uk> */
+-/* { dg-do compile } */
++/* { dg-do compile { target { ! *-*-mingw* } } } */
+ /* { dg-options "-std=iso9899:1990 -pedantic -Wformat" } */
+ 
+ #include "format.h"
+diff -r ddadaee88373 gcc/testsuite/gcc.dg/format/c90-scanf-4.c
+--- a/gcc/testsuite/gcc.dg/format/c90-scanf-4.c	Thu May 29 20:27:38 2008 -0600
++++ b/gcc/testsuite/gcc.dg/format/c90-scanf-4.c	Mon Jun 02 08:07:23 2008 -0600
+@@ -3,7 +3,7 @@
+    do not.
+ */
+ /* Origin: Joseph Myers <jsm28@cam.ac.uk> */
+-/* { dg-do compile } */
++/* { dg-do compile { target { ! *-*-mingw* } } } */
+ /* { dg-options "-std=iso9899:1990 -pedantic -Wformat" } */
+ 
+ #include "format.h"
+diff -r ddadaee88373 gcc/testsuite/gcc.dg/format/c99-printf-3.c
+--- a/gcc/testsuite/gcc.dg/format/c99-printf-3.c	Thu May 29 20:27:38 2008 -0600
++++ b/gcc/testsuite/gcc.dg/format/c99-printf-3.c	Mon Jun 02 08:07:23 2008 -0600
+@@ -2,7 +2,7 @@
+    attributes in strict C99 mode, but the gettext functions do not.
+ */
+ /* Origin: Joseph Myers <jsm28@cam.ac.uk> */
+-/* { dg-do compile } */
++/* { dg-do compile { target { ! *-*-mingw* } } } */
+ /* { dg-options "-std=iso9899:1999 -pedantic -Wformat" } */
+ 
+ #include "format.h"
+diff -r ddadaee88373 gcc/testsuite/gcc.dg/format/format.h
+--- a/gcc/testsuite/gcc.dg/format/format.h	Thu May 29 20:27:38 2008 -0600
++++ b/gcc/testsuite/gcc.dg/format/format.h	Mon Jun 02 08:07:23 2008 -0600
+@@ -1,5 +1,36 @@
+ /* Format checking tests: common header.  */
+ /* Origin: Joseph Myers <jsm28@cam.ac.uk> */
++
++/* DONT_GNU_PROTOTYPE */
++#if defined (_WIN32) && !defined (__CYGWIN__)
++#if !defined (USE_SYSTEM_FORMATS)
++#define gnu_attr_printf	gnu_printf
++#define gnu_attr___printf__ __gnu_printf__
++#define gnu_attr_scanf	gnu_scanf
++#define gnu_attr___scanf__ __gnu_scanf__
++#define gnu_attr_strftime gnu_strftime
++#define gnu_attr___strftime__ __gnu_strftime__
++#endif
++#endif
++
++#ifndef gnu_attr_printf
++#define gnu_attr_printf	printf
++#define gnu_attr___printf__ __printf__
++#define gnu_attr_scanf	scanf
++#define gnu_attr___scanf__ __scanf__
++#define gnu_attr_strftime strftime
++#define gnu_attr___strftime__ __strftime__
++#endif
++
++#if !defined (USE_SYSTEM_FORMATS)
++#define USE_PRINTF(FMTPOS, WILDARG) __attribute__((format(gnu_printf, FMTPOS, WILDARG))) __attribute__((nonnull (FMTPOS)))
++#define USE_SCANF(FMTPOS, WILDARG) __attribute__((format(gnu_scanf, FMTPOS, WILDARG))) __attribute__((nonnull (FMTPOS)))
++#define USE_STRFTIME(FMTPOS) __attribute__((__format__(gnu_strftime, FMTPOS, 0))) __attribute__((nonnull (FMTPOS)))
++#else
++#define USE_PRINTF(FMTPOS, WILDARG)
++#define USE_SCANF(FMTPOS, WILDARG)
++#define USE_STRFTIME(FMTPOS)
++#endif
+ 
+ #include <stdarg.h>
+ #include <stddef.h>
+@@ -11,6 +42,20 @@
+ typedef __WINT_TYPE__ wint_t;
+ #endif
+ 
++#ifdef _WIN64
++/* Kludges to get types corresponding to size_t and ptrdiff_t.  */
++#define unsigned signed
++typedef signed int signed_size_t __attribute__ ((mode (DI)));
++/* We also use this type to approximate ssize_t.  */
++typedef signed int ssize_t __attribute__ ((mode (DI)));
++#undef unsigned
++#define signed /* Type might or might not have explicit 'signed'.  */
++typedef unsigned int unsigned_ptrdiff_t __attribute__ ((mode (DI)));
++#undef signed
++
++__extension__ typedef int llong  __attribute__ ((mode (DI)));
++__extension__ typedef unsigned int ullong  __attribute__ ((mode (DI)));
++#else
+ /* Kludges to get types corresponding to size_t and ptrdiff_t.  */
+ #define unsigned signed
+ typedef __SIZE_TYPE__ signed_size_t;
+@@ -23,6 +68,7 @@
+ 
+ __extension__ typedef long long int llong;
+ __extension__ typedef unsigned long long int ullong;
++#endif
+ 
+ /* %q formats want a "quad"; GCC considers this to be a long long.  */
+ typedef llong quad_t;
+@@ -70,3 +116,77 @@
+ 			const struct tm *restrict);
+ 
+ extern ssize_t strfmon (char *restrict, size_t, const char *restrict, ...);
++
++/* Mingw specific part.  */
++#if !defined (USE_SYSTEM_FORMATS) && defined(_WIN32) && !defined(DONT_GNU_PROTOTYPE)
++
++extern USE_PRINTF(2,3) int fprintf_gnu (FILE *restrict, const char *restrict, ...);
++#undef fprintf
++#define fprintf fprintf_gnu
++
++extern USE_PRINTF(1,2) int printf_gnu (const char *restrict, ...);
++#undef printf
++#define printf printf_gnu
++
++extern USE_PRINTF(2,3) int fprintf_unlocked_gnu (FILE *restrict, const char *restrict, ...);
++#undef fprintf_unlocked
++#define fprintf_unlocked fprintf_unlocked_gnu
++
++extern USE_PRINTF(1,2)int printf_unlocked_gnu (const char *restrict, ...);
++#undef printf_unlocked
++#define printf_unlocked printf_unlocked_gnu
++
++extern USE_PRINTF(2,3) int sprintf_gnu (char *restrict, const char *restrict, ...);
++#undef sprintf
++#define sprintf sprintf_gnu
++
++extern USE_PRINTF(2,0) int vfprintf_gnu (FILE *restrict, const char *restrict, va_list);
++#undef vsprintf
++#define vsprintf vsprintf_gnu
++
++extern USE_PRINTF(1,0) int vprintf_gnu (const char *restrict, va_list);
++#undef vprintf
++#define vprintf vprintf_gnu
++
++extern USE_PRINTF(2,0) int vsprintf_gnu (char *restrict, const char *restrict, va_list);
++#undef vsprintf
++#define vsprintf vsprintf_gnu
++
++extern USE_PRINTF(3,4) int snprintf_gnu (char *restrict, size_t, const char *restrict, ...);
++#undef snprintf
++#define snprintf snprintf_gnu
++
++extern USE_PRINTF(3,0) int vsnprintf_gnu (char *restrict, size_t, const char *restrict, va_list);
++#undef vsnprintf
++#define vsnprintf vsnprintf_gnu
++
++extern USE_SCANF(2,3) int fscanf_gnu (FILE *restrict, const char *restrict, ...);
++#undef fscanf
++#define fscanf fscanf_gnu
++
++extern USE_SCANF(1,2) int scanf_gnu (const char *restrict, ...);
++#undef scanf
++#define scanf scanf_gnu
++
++extern USE_SCANF(2,3) int sscanf_gnu (const char *restrict, const char *restrict, ...);
++#undef sscanf
++#define sscanf sscanf_gnu
++
++extern USE_SCANF(2,0) int vfscanf_gnu (FILE *restrict, const char *restrict, va_list);
++#undef vfscanf
++#define vfscanf vfscanf_gnu
++
++extern USE_SCANF(1,0) int vscanf_gnu (const char *restrict, va_list);
++#undef vscanf
++#define vscanf vscanf_gnu
++
++extern USE_SCANF(2,0) int vsscanf_gnu (const char *restrict, const char *restrict, va_list);
++#undef vsscanf
++#define vsscanf vsscanf_gnu
++
++extern USE_STRFTIME(3) size_t strftime_gnu (char *restrict, size_t, const char *restrict,
++			const struct tm *restrict);
++#undef strftime
++#define strftime strftime_gnu
++
++#endif
+diff -r ddadaee88373 gcc/testsuite/gcc.dg/format/miss-1.c
+--- a/gcc/testsuite/gcc.dg/format/miss-1.c	Thu May 29 20:27:38 2008 -0600
++++ b/gcc/testsuite/gcc.dg/format/miss-1.c	Mon Jun 02 08:07:23 2008 -0600
+@@ -23,7 +23,7 @@
+   va_end (ap);
+ }
+ 
+-__attribute__((__format__(__printf__, 1, 2))) void
++__attribute__((__format__(gnu_attr___printf__, 1, 2))) void
+ foo2 (const char *fmt, ...)
+ {
+   va_list ap;
+diff -r ddadaee88373 gcc/testsuite/gcc.dg/format/miss-3.c
+--- a/gcc/testsuite/gcc.dg/format/miss-3.c	Thu May 29 20:27:38 2008 -0600
++++ b/gcc/testsuite/gcc.dg/format/miss-3.c	Mon Jun 02 08:07:23 2008 -0600
+@@ -3,13 +3,14 @@
+ /* { dg-do compile } */
+ /* { dg-options "-std=gnu99 -Wmissing-format-attribute" } */
+ 
++#define DONT_GNU_PROTOTYPE
+ #include "format.h"
+ 
+ typedef void (*noattr_t) (const char *, ...);
+-typedef noattr_t __attribute__ ((__format__(__printf__, 1, 2))) attr_t;
++typedef noattr_t __attribute__ ((__format__(gnu_attr___printf__, 1, 2))) attr_t;
+ 
+ typedef void (*vnoattr_t) (const char *, va_list);
+-typedef vnoattr_t __attribute__ ((__format__(__printf__, 1, 0))) vattr_t;
++typedef vnoattr_t __attribute__ ((__format__(gnu_attr___printf__, 1, 0))) vattr_t;
+ 
+ void
+ foo1 (noattr_t na, attr_t a, vnoattr_t vna, vattr_t va)
+@@ -18,7 +19,7 @@
+   noattr_t na2 = a; /* { dg-warning "candidate" "initialization warning" } */
+   attr_t a1 = na;
+   attr_t a2 = a;
+-  
++
+   vnoattr_t vna1 = vna;
+   vnoattr_t vna2 = va; /* { dg-warning "candidate" "initialization warning" } */
+   vattr_t va1 = vna;
+diff -r ddadaee88373 gcc/testsuite/gcc.dg/format/miss-4.c
+--- a/gcc/testsuite/gcc.dg/format/miss-4.c	Thu May 29 20:27:38 2008 -0600
++++ b/gcc/testsuite/gcc.dg/format/miss-4.c	Mon Jun 02 08:07:23 2008 -0600
+@@ -3,20 +3,21 @@
+ /* { dg-do compile } */
+ /* { dg-options "-std=gnu99 -Wmissing-format-attribute" } */
+ 
++#define DONT_GNU_PROTOTYPE
+ #include "format.h"
+ 
+ typedef void (*noattr_t) (const char *, ...);
+-typedef noattr_t __attribute__ ((__format__(__printf__, 1, 2))) attr_t;
++typedef noattr_t __attribute__ ((__format__(gnu_attr___printf__, 1, 2))) attr_t;
+ 
+ typedef void (*vnoattr_t) (const char *, va_list);
+-typedef vnoattr_t __attribute__ ((__format__(__printf__, 1, 0))) vattr_t;
++typedef vnoattr_t __attribute__ ((__format__(gnu_attr___printf__, 1, 0))) vattr_t;
+ 
+ void
+ foo1 (noattr_t na, attr_t a, vnoattr_t vna, vattr_t va)
+ {
+   noattr_t na1, na2;
+   attr_t a1, a2;
+-  
++
+   vnoattr_t vna1, vna2;
+   vattr_t va1, va2;
+ 
+@@ -24,7 +25,7 @@
+   na2 = a; /* { dg-warning "candidate" "assignment warning" } */
+   a1 = na;
+   a2 = a;
+-  
++
+   vna1 = vna;
+   vna2 = va; /* { dg-warning "candidate" "assignment warning" } */
+   va1 = vna;
+diff -r ddadaee88373 gcc/testsuite/gcc.dg/format/miss-5.c
+--- a/gcc/testsuite/gcc.dg/format/miss-5.c	Thu May 29 20:27:38 2008 -0600
++++ b/gcc/testsuite/gcc.dg/format/miss-5.c	Mon Jun 02 08:07:23 2008 -0600
+@@ -3,13 +3,14 @@
+ /* { dg-do compile } */
+ /* { dg-options "-std=gnu99 -Wmissing-format-attribute" } */
+ 
++#define DONT_GNU_PROTOTYPE
+ #include "format.h"
+ 
+ typedef void (*noattr_t) (const char *, ...);
+-typedef noattr_t __attribute__ ((__format__(__printf__, 1, 2))) attr_t;
++typedef noattr_t __attribute__ ((__format__(gnu_attr___printf__, 1, 2))) attr_t;
+ 
+ typedef void (*vnoattr_t) (const char *, va_list);
+-typedef vnoattr_t __attribute__ ((__format__(__printf__, 1, 0))) vattr_t;
++typedef vnoattr_t __attribute__ ((__format__(gnu_attr___printf__, 1, 0))) vattr_t;
+ 
+ noattr_t
+ foo1 (noattr_t na, attr_t a, int i)
+diff -r ddadaee88373 gcc/testsuite/gcc.dg/format/miss-6.c
+--- a/gcc/testsuite/gcc.dg/format/miss-6.c	Thu May 29 20:27:38 2008 -0600
++++ b/gcc/testsuite/gcc.dg/format/miss-6.c	Mon Jun 02 08:07:23 2008 -0600
+@@ -3,13 +3,14 @@
+ /* { dg-do compile } */
+ /* { dg-options "-std=gnu99 -Wmissing-format-attribute" } */
+ 
++#define DONT_GNU_PROTOTYPE
+ #include "format.h"
+ 
+ typedef void (*noattr_t) (const char *, ...);
+-typedef noattr_t __attribute__ ((__format__(__printf__, 1, 2))) attr_t;
++typedef noattr_t __attribute__ ((__format__(gnu_attr___printf__, 1, 2))) attr_t;
+ 
+ typedef void (*vnoattr_t) (const char *, va_list);
+-typedef vnoattr_t __attribute__ ((__format__(__printf__, 1, 0))) vattr_t;
++typedef vnoattr_t __attribute__ ((__format__(gnu_attr___printf__, 1, 0))) vattr_t;
+ 
+ extern void foo1 (noattr_t);
+ extern void foo2 (attr_t);
+@@ -23,7 +24,7 @@
+   foo1 (a); /* { dg-warning "candidate" "parameter passing warning" } */
+   foo2 (na);
+   foo2 (a);
+-  
++
+   foo3 (vna);
+   foo3 (va); /* { dg-warning "candidate" "parameter passing warning" } */
+   foo4 (vna);
+diff -r ddadaee88373 gcc/testsuite/gcc.dg/format/ms_array-1.c
+--- /dev/null	Thu Jan 01 00:00:00 1970 +0000
++++ b/gcc/testsuite/gcc.dg/format/ms_array-1.c	Mon Jun 02 08:07:23 2008 -0600
+@@ -0,0 +1,42 @@
++/* Test for format checking of constant arrays.  */
++/* Origin: Joseph Myers <jsm28@cam.ac.uk> */
++/* { dg-do compile { target { *-*-mingw* } } } */
++/* { dg-options "-std=gnu99 -Wformat=2" } */
++
++#define USE_SYSTEM_FORMATS
++#include "format.h"
++
++const char a1[] = "foo";
++const char a2[] = "foo%d";
++const char b1[3] = "foo";
++const char b2[1] = "1";
++static const char c1[] = "foo";
++static const char c2[] = "foo%d";
++char d[] = "foo";
++volatile const char e[] = "foo";
++
++void
++foo (int i, long l)
++{
++  const char p1[] = "bar";
++  const char p2[] = "bar%d";
++  static const char q1[] = "bar";
++  static const char q2[] = "bar%d";
++  printf (a1);
++  printf (a2, i);
++  printf (a2, l); /* { dg-warning "format" "wrong type with array" } */
++  printf (b1); /* { dg-warning "unterminated" "unterminated array" } */
++  printf (b2); /* { dg-warning "unterminated" "unterminated array" } */
++  printf (c1);
++  printf (c2, i);
++  printf (c2, l); /* { dg-warning "format" "wrong type with array" } */
++  printf (p1);
++  printf (p2, i);
++  printf (p2, l); /* { dg-warning "format" "wrong type with array" } */
++  printf (q1);
++  printf (q2, i);
++  printf (q2, l); /* { dg-warning "format" "wrong type with array" } */
++  /* Volatile or non-constant arrays must not be checked.  */
++  printf (d); /* { dg-warning "not a string literal" "non-const" } */
++  printf ((const char *)e); /* { dg-warning "not a string literal" "volatile" } */
++}
+diff -r ddadaee88373 gcc/testsuite/gcc.dg/format/ms_attr-1.c
+--- /dev/null	Thu Jan 01 00:00:00 1970 +0000
++++ b/gcc/testsuite/gcc.dg/format/ms_attr-1.c	Mon Jun 02 08:07:23 2008 -0600
+@@ -0,0 +1,10 @@
++/* Test for strftime format attributes: can't have first_arg_num != 0.  */
++/* Origin: Joseph Myers <jsm28@cam.ac.uk> */
++/* { dg-do compile { target { *-*-mingw* } } } */
++/* { dg-options "-std=gnu99 -Wformat" } */
++
++#define DONT_GNU_PROTOTYPE
++#include "format.h"
++
++extern void foo0 (const char *) __attribute__((__format__(__ms_strftime__, 1, 0)));
++extern void foo1 (const char *, ...) __attribute__((__format__(__ms_strftime__, 1, 2))); /* { dg-error "cannot format" "strftime first_arg_num != 0" } */
+diff -r ddadaee88373 gcc/testsuite/gcc.dg/format/ms_attr-2.c
+--- /dev/null	Thu Jan 01 00:00:00 1970 +0000
++++ b/gcc/testsuite/gcc.dg/format/ms_attr-2.c	Mon Jun 02 08:07:23 2008 -0600
+@@ -0,0 +1,68 @@
++/* Test for format attributes: test use of __attribute__.  */
++/* Origin: Joseph Myers <jsm28@cam.ac.uk> */
++/* { dg-do compile { target { *-*-mingw* } } } */
++/* { dg-options "-std=gnu99 -Wformat" } */
++
++#define DONT_GNU_PROTOTYPE
++#include "format.h"
++
++extern void tformatprintf (const char *, ...) __attribute__((format(ms_printf, 1, 2)));
++extern void tformat__printf__ (const char *, ...) __attribute__((format(__ms_printf__, 1, 2)));
++extern void tformatscanf (const char *, ...) __attribute__((format(ms_scanf, 1, 2)));
++extern void tformat__scanf__ (const char *, ...) __attribute__((format(__ms_scanf__, 1, 2)));
++extern void tformatstrftime (const char *) __attribute__((format(ms_strftime, 1, 0)));
++extern void tformat__strftime__ (const char *) __attribute__((format(__ms_strftime__, 1, 0)));
++extern void tformatstrfmon (const char *, ...) __attribute__((format(strfmon, 1, 2)));
++extern void tformat__strfmon__ (const char *, ...) __attribute__((format(__strfmon__, 1, 2)));
++extern void t__format__printf (const char *, ...) __attribute__((__format__(ms_printf, 1, 2)));
++extern void t__format____printf__ (const char *, ...) __attribute__((__format__(__ms_printf__, 1, 2)));
++extern void t__format__scanf (const char *, ...) __attribute__((__format__(ms_scanf, 1, 2)));
++extern void t__format____scanf__ (const char *, ...) __attribute__((__format__(__ms_scanf__, 1, 2)));
++extern void t__format__strftime (const char *) __attribute__((__format__(ms_strftime, 1, 0)));
++extern void t__format____strftime__ (const char *) __attribute__((__format__(__ms_strftime__, 1, 0)));
++extern void t__format__strfmon (const char *, ...) __attribute__((__format__(strfmon, 1, 2)));
++extern void t__format____strfmon__ (const char *, ...) __attribute__((__format__(__strfmon__, 1, 2)));
++
++extern char *tformat_arg (const char *) __attribute__((format_arg(1)));
++extern char *t__format_arg__ (const char *) __attribute__((__format_arg__(1)));
++
++void
++foo (int i, int *ip, double d)
++{
++  tformatprintf ("%d", i);
++  tformatprintf ("%"); /* { dg-warning "format" "attribute format printf" } */
++  tformat__printf__ ("%d", i);
++  tformat__printf__ ("%"); /* { dg-warning "format" "attribute format __printf__" } */
++  tformatscanf ("%d", ip);
++  tformatscanf ("%"); /* { dg-warning "format" "attribute format scanf" } */
++  tformat__scanf__ ("%d", ip);
++  tformat__scanf__ ("%"); /* { dg-warning "format" "attribute format __scanf__" } */
++  tformatstrftime ("%a");
++  tformatstrftime ("%"); /* { dg-warning "format" "attribute format strftime" } */
++  tformat__strftime__ ("%a");
++  tformat__strftime__ ("%"); /* { dg-warning "format" "attribute format __strftime__" } */
++  tformatstrfmon ("%n", d);
++  tformatstrfmon ("%"); /* { dg-warning "format" "attribute format strfmon" } */
++  tformat__strfmon__ ("%n", d);
++  tformat__strfmon__ ("%"); /* { dg-warning "format" "attribute format __strfmon__" } */
++  t__format__printf ("%d", i);
++  t__format__printf ("%"); /* { dg-warning "format" "attribute __format__ printf" } */
++  t__format____printf__ ("%d", i);
++  t__format____printf__ ("%"); /* { dg-warning "format" "attribute __format__ __printf__" } */
++  t__format__scanf ("%d", ip);
++  t__format__scanf ("%"); /* { dg-warning "format" "attribute __format__ scanf" } */
++  t__format____scanf__ ("%d", ip);
++  t__format____scanf__ ("%"); /* { dg-warning "format" "attribute __format__ __scanf__" } */
++  t__format__strftime ("%a");
++  t__format__strftime ("%"); /* { dg-warning "format" "attribute __format__ strftime" } */
++  t__format____strftime__ ("%a");
++  t__format____strftime__ ("%"); /* { dg-warning "format" "attribute __format__ __strftime__" } */
++  t__format__strfmon ("%n", d);
++  t__format__strfmon ("%"); /* { dg-warning "format" "attribute __format__ strfmon" } */
++  t__format____strfmon__ ("%n", d);
++  t__format____strfmon__ ("%"); /* { dg-warning "format" "attribute __format__ __strfmon__" } */
++  tformatprintf (tformat_arg ("%d"), i);
++  tformatprintf (tformat_arg ("%")); /* { dg-warning "format" "attribute format_arg" } */
++  tformatprintf (t__format_arg__ ("%d"), i);
++  tformatprintf (t__format_arg__ ("%")); /* { dg-warning "format" "attribute __format_arg__" } */
++}
+diff -r ddadaee88373 gcc/testsuite/gcc.dg/format/ms_attr-3.c
+--- /dev/null	Thu Jan 01 00:00:00 1970 +0000
++++ b/gcc/testsuite/gcc.dg/format/ms_attr-3.c	Mon Jun 02 08:07:23 2008 -0600
+@@ -0,0 +1,71 @@
++/* Test for format attributes: test bad uses of __attribute__.  */
++/* Origin: Joseph Myers <jsm28@cam.ac.uk> */
++/* { dg-do compile { target { *-*-mingw* } } } */
++/* { dg-options "-std=gnu99 -Wformat" } */
++
++#define USE_SYSTEM_FORMATS
++#include "format.h"
++
++/* Proper uses of the attributes.  */
++extern void fa0 (const char *, ...) __attribute__((format(ms_printf, 1, 2)));
++extern void fa1 (char *, ...) __attribute__((format(ms_printf, 1, 2)));
++extern char *fa2 (const char *) __attribute__((format_arg(1)));
++extern char *fa3 (char *) __attribute__((format_arg(1)));
++
++/* Uses with too few or too many arguments.  */
++extern void fb0 (const char *, ...) __attribute__((format)); /* { dg-error "wrong number of arguments" "bad format" } */
++extern void fb1 (const char *, ...) __attribute__((format())); /* { dg-error "wrong number of arguments" "bad format" } */
++extern void fb2 (const char *, ...) __attribute__((format(ms_printf))); /* { dg-error "wrong number of arguments" "bad format" } */
++extern void fb3 (const char *, ...) __attribute__((format(ms_printf, 1))); /* { dg-error "wrong number of arguments" "bad format" } */
++extern void fb4 (const char *, ...) __attribute__((format(ms_printf, 1, 2, 3))); /* { dg-error "wrong number of arguments" "bad format" } */
++
++extern void fc1 (const char *) __attribute__((format_arg)); /* { dg-error "wrong number of arguments" "bad format_arg" } */
++extern void fc2 (const char *) __attribute__((format_arg())); /* { dg-error "wrong number of arguments" "bad format_arg" } */
++extern void fc3 (const char *) __attribute__((format_arg(1, 2))); /* { dg-error "wrong number of arguments" "bad format_arg" } */
++
++/* These attributes presently only apply to declarations, not to types.
++   Eventually, they should be usable with declarators for function types
++   anywhere, but still not with structure/union/enum types.  */
++struct s0 { int i; } __attribute__((format(ms_printf, 1, 2))); /* { dg-error "does not apply|only applies" "format on struct" } */
++union u0 { int i; } __attribute__((format(ms_printf, 1, 2))); /* { dg-error "does not apply|only applies" "format on union" } */
++enum e0 { E0V0 } __attribute__((format(ms_printf, 1, 2))); /* { dg-error "does not apply|only applies" "format on enum" } */
++
++struct s1 { int i; } __attribute__((format_arg(1))); /* { dg-error "does not apply|only applies" "format_arg on struct" } */
++union u1 { int i; } __attribute__((format_arg(1))); /* { dg-error "does not apply|only applies" "format_arg on union" } */
++enum e1 { E1V0 } __attribute__((format_arg(1))); /* { dg-error "does not apply|only applies" "format_arg on enum" } */
++
++/* The format type must be an identifier, one of those recognized.  */
++extern void fe0 (const char *, ...) __attribute__((format(12345, 1, 2))); /* { dg-error "format specifier" "non-id format" } */
++extern void fe1 (const char *, ...) __attribute__((format(nosuch, 1, 2))); /* { dg-warning "format function type" "unknown format" } */
++
++/* Both the numbers must be integer constant expressions.  */
++extern void ff0 (const char *, ...) __attribute__((format(ms_printf, 3-2, (long long)(10/5))));
++int foo;
++extern void ff1 (const char *, ...) __attribute__((format(ms_printf, foo, 10/5))); /* { dg-error "invalid operand" "bad number" } */
++extern void ff2 (const char *, ...) __attribute__((format(ms_printf, 3-2, foo))); /* { dg-error "invalid operand" "bad number" } */
++extern char *ff3 (const char *) __attribute__((format_arg(3-2)));
++extern char *ff4 (const char *) __attribute__((format_arg(foo))); /* { dg-error "invalid operand" "bad format_arg number" } */
++
++/* The format string argument must precede the arguments to be formatted.
++   This includes if no parameter types are specified (which is not valid ISO
++   C for variadic functions).  */
++extern void fg0 () __attribute__((format(ms_printf, 1, 2)));
++extern void fg1 () __attribute__((format(ms_printf, 1, 0)));
++extern void fg2 () __attribute__((format(ms_printf, 1, 1))); /* { dg-error "follows" "bad number order" } */
++extern void fg3 () __attribute__((format(ms_printf, 2, 1))); /* { dg-error "follows" "bad number order" } */
++
++/* The format string argument must be a string type, and the arguments to
++   be formatted must be the "...".  */
++extern void fh0 (int, ...) __attribute__((format(ms_printf, 1, 2))); /* { dg-error "not a string" "format int string" } */
++extern void fh1 (signed char *, ...) __attribute__((format(ms_printf, 1, 2))); /* { dg-error "not a string" "signed char string" } */
++extern void fh2 (unsigned char *, ...) __attribute__((format(ms_printf, 1, 2))); /* { dg-error "not a string" "unsigned char string" } */
++extern void fh3 (const char *, ...) __attribute__((format(ms_printf, 1, 3))); /* { dg-error "is not" "not ..." } */
++extern void fh4 (const char *, int, ...) __attribute__((format(ms_printf, 1, 2))); /* { dg-error "is not" "not ..." } */
++
++/* format_arg formats must take and return a string.  */
++extern char *fi0 (int) __attribute__((format_arg(1))); /* { dg-error "not a string" "format_arg int string" } */
++extern char *fi1 (signed char *) __attribute__((format_arg(1))); /* { dg-error "not a string" "format_arg signed char string" } */
++extern char *fi2 (unsigned char *) __attribute__((format_arg(1))); /* { dg-error "not a string" "format_arg unsigned char string" } */
++extern int fi3 (const char *) __attribute__((format_arg(1))); /* { dg-error "not return string" "format_arg ret int string" } */
++extern signed char *fi4 (const char *) __attribute__((format_arg(1))); /* { dg-error "not return string" "format_arg ret signed char string" } */
++extern unsigned char *fi5 (const char *) __attribute__((format_arg(1))); /* { dg-error "not return string" "format_arg ret unsigned char string" } */
+diff -r ddadaee88373 gcc/testsuite/gcc.dg/format/ms_attr-4.c
+--- /dev/null	Thu Jan 01 00:00:00 1970 +0000
++++ b/gcc/testsuite/gcc.dg/format/ms_attr-4.c	Mon Jun 02 08:07:23 2008 -0600
+@@ -0,0 +1,26 @@
++/* Test for format attributes: test use of __attribute__
++   in prefix attributes.  */
++/* Origin: Joseph Myers <jsm28@cam.ac.uk> */
++/* { dg-do compile { target { *-*-mingw* } } } */
++/* { dg-options "-std=gnu99 -Wformat" } */
++
++#define USE_SYSTEM_FORMATS
++#include "format.h"
++
++extern __attribute__((format(ms_printf, 1, 2))) void tformatprintf0 (const char *, ...);
++extern void __attribute__((format(ms_printf, 1, 2))) tformatprintf1 (const char *, ...);
++extern void foo (void), __attribute__((format(ms_printf, 1, 2))) tformatprintf2 (const char *, ...);
++extern __attribute__((noreturn)) void bar (void), __attribute__((format(ms_printf, 1, 2))) tformatprintf3 (const char *, ...);
++
++void
++baz (int i, int *ip, double d)
++{
++  tformatprintf0 ("%d", i);
++  tformatprintf0 ("%"); /* { dg-warning "format" "attribute format printf case 0" } */
++  tformatprintf1 ("%d", i);
++  tformatprintf1 ("%"); /* { dg-warning "format" "attribute format printf case 1" } */
++  tformatprintf2 ("%d", i);
++  tformatprintf2 ("%"); /* { dg-warning "format" "attribute format printf case 2" } */
++  tformatprintf3 ("%d", i);
++  tformatprintf3 ("%"); /* { dg-warning "format" "attribute format printf case 3" } */
++}
+diff -r ddadaee88373 gcc/testsuite/gcc.dg/format/ms_attr-7.c
+--- /dev/null	Thu Jan 01 00:00:00 1970 +0000
++++ b/gcc/testsuite/gcc.dg/format/ms_attr-7.c	Mon Jun 02 08:07:23 2008 -0600
+@@ -0,0 +1,35 @@
++/* Test for format attributes: test applying them to types.  */
++/* Origin: Joseph Myers <jsm28@cam.ac.uk> */
++/* { dg-do compile { target { *-*-mingw* } } } */
++/* { dg-options "-std=gnu99 -Wformat" } */
++
++#define DONT_GNU_PROTOTYPE
++#include "format.h"
++
++__attribute__((format(ms_printf, 1, 2))) void (*tformatprintf0) (const char *, ...);
++void (*tformatprintf1) (const char *, ...) __attribute__((format(ms_printf, 1, 2)));
++void (__attribute__((format(ms_printf, 1, 2))) *tformatprintf2) (const char *, ...);
++void (__attribute__((format(ms_printf, 1, 2))) ****tformatprintf3) (const char *, ...);
++
++char * (__attribute__((format_arg(1))) *tformat_arg) (const char *);
++
++void
++baz (int i)
++{
++  (*tformatprintf0) ("%d", i);
++  (*tformatprintf0) ((*tformat_arg) ("%d"), i);
++  (*tformatprintf0) ("%"); /* { dg-warning "format" "prefix" } */
++  (*tformatprintf0) ((*tformat_arg) ("%")); /* { dg-warning "format" "prefix" } */
++  (*tformatprintf1) ("%d", i);
++  (*tformatprintf1) ((*tformat_arg) ("%d"), i);
++  (*tformatprintf1) ("%"); /* { dg-warning "format" "postfix" } */
++  (*tformatprintf1) ((*tformat_arg) ("%")); /* { dg-warning "format" "postfix" } */
++  (*tformatprintf2) ("%d", i);
++  (*tformatprintf2) ((*tformat_arg) ("%d"), i);
++  (*tformatprintf2) ("%"); /* { dg-warning "format" "nested" } */
++  (*tformatprintf2) ((*tformat_arg) ("%")); /* { dg-warning "format" "nested" } */
++  (****tformatprintf3) ("%d", i);
++  (****tformatprintf3) ((*tformat_arg) ("%d"), i);
++  (****tformatprintf3) ("%"); /* { dg-warning "format" "nested 2" } */
++  (****tformatprintf3) ((*tformat_arg) ("%")); /* { dg-warning "format" "nested 2" } */
++}
+diff -r ddadaee88373 gcc/testsuite/gcc.dg/format/ms_bitfld-1.c
+--- /dev/null	Thu Jan 01 00:00:00 1970 +0000
++++ b/gcc/testsuite/gcc.dg/format/ms_bitfld-1.c	Mon Jun 02 08:07:23 2008 -0600
+@@ -0,0 +1,52 @@
++/* Test for printf formats and bit-fields: bug 22421.  */
++/* Origin: Joseph Myers <joseph@codesourcery.com> */
++/* { dg-do compile { target { *-*-mingw* } } } */
++/* { dg-options "-std=gnu99 -Wformat" } */
++/* { dg-require-effective-target int32plus } */
++
++#define USE_SYSTEM_FORMATS
++#include "format.h"
++
++struct s {
++  unsigned int u1 : 1;
++  signed int s1 : 1;
++  unsigned int u15 : 15;
++  signed int s15 : 15;
++  unsigned int u16 : 16;
++  signed int s16 : 16;
++  unsigned long u31 : 31;
++  signed long s31 : 31;
++  unsigned long u32 : 32;
++  signed long s32 : 32;
++  unsigned long long u48 : 48;
++} x;
++
++void
++foo (void)
++{
++  printf ("%d%u", x.u1, x.u1);
++  printf ("%d%u", x.s1, x.s1);
++  printf ("%d%u", x.u15, x.u15);
++  printf ("%d%u", x.s15, x.s15);
++  printf ("%d%u", x.u16, x.u16);
++  printf ("%d%u", x.s16, x.s16);
++#if __INT_MAX__ > 32767
++  /* If integers are 16 bits, there doesn't seem to be a way of
++     printing these without getting an error.  */
++  printf ("%d%u", x.u31, x.u31);
++  printf ("%d%u", x.s31, x.s31);
++#endif
++#if __LONG_MAX__ > 2147483647 && __INT_MAX__ >= 2147483647
++  /* If long is wider than 32 bits, the 32-bit bit-fields are int or
++     unsigned int or promote to those types.  Otherwise, long is 32
++     bits and the bit-fields are of type plain long or unsigned
++     long.  */
++  printf ("%d%u", x.u32, x.u32);
++  printf ("%d%u", x.s32, x.s32);
++#else
++  printf ("%ld%lu", x.u32, x.u32);
++  printf ("%ld%lu", x.s32, x.s32);
++#endif
++  printf ("%I64u", x.u48); /* { dg-warning "has type '.*unsigned int:48'" } */
++  printf ("%I64u", (unsigned long long)x.u48);
++}
+diff -r ddadaee88373 gcc/testsuite/gcc.dg/format/ms_branch-1.c
+--- /dev/null	Thu Jan 01 00:00:00 1970 +0000
++++ b/gcc/testsuite/gcc.dg/format/ms_branch-1.c	Mon Jun 02 08:07:23 2008 -0600
+@@ -0,0 +1,28 @@
++/* Test for format checking of conditional expressions.  */
++/* Origin: Joseph Myers <jsm28@cam.ac.uk> */
++/* { dg-do compile { target { *-*-mingw* } } } */
++/* { dg-options "-std=gnu99 -Wformat" } */
++
++#define USE_SYSTEM_FORMATS
++#include "format.h"
++
++void
++foo (long l, int nfoo)
++{
++  printf ((nfoo > 1) ? "%d foos" : "%d foo", nfoo);
++  printf ((l > 1) ? "%d foos" : "%d foo", l); /* { dg-warning "int" "wrong type in conditional expr" } */
++  printf ((l > 1) ? "%ld foos" : "%d foo", l); /* { dg-warning "int" "wrong type in conditional expr" } */
++  printf ((l > 1) ? "%d foos" : "%ld foo", l); /* { dg-warning "int" "wrong type in conditional expr" } */
++  /* Should allow one case to have extra arguments.  */
++  printf ((nfoo > 1) ? "%d foos" : "1 foo", nfoo);
++  printf ((nfoo > 1) ? "many foos" : "1 foo", nfoo); /* { dg-warning "too many" "too many args in all branches" } */
++  printf ((nfoo > 1) ? "%d foos" : "", nfoo);
++  printf ((nfoo > 1) ? "%d foos" : ((nfoo > 0) ? "1 foo" : "no foos"), nfoo);
++  printf ((nfoo > 1) ? "%d foos" : ((nfoo > 0) ? "%d foo" : "%d foos"), nfoo);
++  printf ((nfoo > 1) ? "%d foos" : ((nfoo > 0) ? "%d foo" : "%ld foos"), nfoo); /* { dg-warning "long int" "wrong type" } */
++  printf ((nfoo > 1) ? "%ld foos" : ((nfoo > 0) ? "%d foo" : "%d foos"), nfoo); /* { dg-warning "long int" "wrong type" } */
++  printf ((nfoo > 1) ? "%d foos" : ((nfoo > 0) ? "%ld foo" : "%d foos"), nfoo); /* { dg-warning "long int" "wrong type" } */
++  /* Extra arguments to NULL should be complained about.  */
++  printf (NULL, "foo"); /* { dg-warning "too many" "NULL extra args" } */
++  /* { dg-warning "null" "null format arg" { target *-*-* } 26 } */
++}
+diff -r ddadaee88373 gcc/testsuite/gcc.dg/format/ms_c90-printf-1.c
+--- /dev/null	Thu Jan 01 00:00:00 1970 +0000
++++ b/gcc/testsuite/gcc.dg/format/ms_c90-printf-1.c	Mon Jun 02 08:07:23 2008 -0600
+@@ -0,0 +1,184 @@
++/* Test for printf formats.  Formats using C90 features, including cases
++   where C90 specifies some aspect of the format to be ignored or where
++   the behavior is undefined.
++*/
++/* Origin: Joseph Myers <jsm28@cam.ac.uk> */
++/* { dg-do compile { target { *-*-mingw* } } } */
++/* { dg-options "-std=iso9899:1990 -pedantic -Wformat" } */
++
++#define USE_SYSTEM_FORMATS
++#include "format.h"
++
++void
++foo (int i, int i1, int i2, unsigned int u, double d, char *s, void *p,
++     int *n, short int *hn, long int l, unsigned long int ul,
++     long int *ln, long double ld, wint_t lc, wchar_t *ls, llong ll,
++     ullong ull, unsigned int *un, const int *cn, signed char *ss,
++     unsigned char *us, const signed char *css, unsigned int u1,
++     unsigned int u2)
++{
++  /* See ISO/IEC 9899:1990 (E) subclause 7.9.6.1 (pages 131-134).  */
++  /* Basic sanity checks for the different components of a format.  */
++  printf ("%d\n", i);
++  printf ("%+d\n", i);
++  printf ("%3d\n", i);
++  printf ("%-3d\n", i);
++  printf ("%*d\n", i1, i);
++  printf ("%d %lu\n", i, ul);
++  /* Bogus use of width.  */
++  printf ("%5n\n", n); /* { dg-warning "width" "width with %n" } */
++  /* Valid and invalid %% constructions.  Some of the warning messages
++     are non-optimal, but they do detect the errorneous nature of the
++     format string.
++  */
++  printf ("%%");
++  printf ("%-%"); /* { dg-warning "format" "bogus %%" } */
++  printf ("%-%\n"); /* { dg-warning "format" "bogus %%" } */
++  printf ("%5%\n"); /* { dg-warning "format" "bogus %%" } */
++  printf ("%h%\n"); /* { dg-warning "format" "bogus %%" } */
++  /* Valid and invalid %h, %l, %L constructions.  */
++  printf ("%hd", i);
++  printf ("%hi", i);
++  /* Strictly, these parameters should be int or unsigned int according to
++     what unsigned short promotes to.  However, GCC ignores sign
++     differences in format checking here, and this is relied on to get the
++     correct checking without print_char_table needing to know whether
++     int and short are the same size.
++  */
++  printf ("%ho%hu%hx%hX", u, u, u, u);
++  printf ("%hn", hn);
++  printf ("%hf", d); /* { dg-warning "length" "bad use of %h" } */
++  printf ("%he", d); /* { dg-warning "length" "bad use of %h" } */
++  printf ("%hE", d); /* { dg-warning "length" "bad use of %h" } */
++  printf ("%hg", d); /* { dg-warning "length" "bad use of %h" } */
++  printf ("%hG", d); /* { dg-warning "length" "bad use of %h" } */
++  printf ("%hc", i);
++  printf ("%hs", hn);
++  printf ("%hp", p); /* { dg-warning "length" "bad use of %h" } */
++  printf ("%h"); /* { dg-warning "conversion lacks type" "bare %h" } */
++  printf ("%ld%li%lo%lu%lx%lX", l, l, ul, ul, ul, ul);
++  printf ("%ln", ln);
++  printf ("%lf", d); /* { dg-warning "length|C" "bad use of %l" } */
++  printf ("%le", d); /* { dg-warning "length|C" "bad use of %l" } */
++  printf ("%lE", d); /* { dg-warning "length|C" "bad use of %l" } */
++  printf ("%lg", d); /* { dg-warning "length|C" "bad use of %l" } */
++  printf ("%lG", d); /* { dg-warning "length|C" "bad use of %l" } */
++  printf ("%lp", p); /* { dg-warning "length|C" "bad use of %l" } */
++  /* These next two were added in C94, but should be objected to in C90.
++     For the first one, GCC has wanted wchar_t instead of the correct C94
++     and C99 wint_t.
++  */
++  printf ("%lc", lc); /* { dg-warning "length|C" "C90 bad use of %l" } */
++  printf ("%ls", ls); /* { dg-warning "length|C" "C90 bad use of %l" } */
++  /* Valid uses of each bare conversion.  */
++  printf ("%d%i%o%u%x%X%f%e%E%g%G%c%s%p%n%%", i, i, u, u, u, u, d, d, d, d, d,
++	  i, s, p, n);
++  /* Uses of the - flag (valid on all non-%, non-n conversions).  */
++  printf ("%-d%-i%-o%-u%-x%-X%-f%-e%-E%-g%-G%-c%-s%-p", i, i, u, u, u, u,
++	  d, d, d, d, d, i, s, p);
++  printf ("%-n", n); /* { dg-warning "flag" "bad use of %-n" } */
++  /* Uses of the + flag (valid on signed conversions only).  */
++  printf ("%+d%+i%+f%+e%+E%+g%+G\n", i, i, d, d, d, d, d);
++  printf ("%+o", u); /* { dg-warning "flag" "bad use of + flag" } */
++  printf ("%+u", u); /* { dg-warning "flag" "bad use of + flag" } */
++  printf ("%+x", u); /* { dg-warning "flag" "bad use of + flag" } */
++  printf ("%+X", u); /* { dg-warning "flag" "bad use of + flag" } */
++  printf ("%+c", i); /* { dg-warning "flag" "bad use of + flag" } */
++  printf ("%+s", s); /* { dg-warning "flag" "bad use of + flag" } */
++  printf ("%+p", p); /* { dg-warning "flag" "bad use of + flag" } */
++  printf ("%+n", n); /* { dg-warning "flag" "bad use of + flag" } */
++  /* Uses of the space flag (valid on signed conversions only, and ignored
++     with +).
++  */
++  printf ("% +d", i); /* { dg-warning "use of both|ignored" "use of space and + flags" } */
++  printf ("%+ d", i); /* { dg-warning "use of both|ignored" "use of space and + flags" } */
++  printf ("% d% i% f% e% E% g% G\n", i, i, d, d, d, d, d);
++  printf ("% o", u); /* { dg-warning "flag" "bad use of space flag" } */
++  printf ("% u", u); /* { dg-warning "flag" "bad use of space flag" } */
++  printf ("% x", u); /* { dg-warning "flag" "bad use of space flag" } */
++  printf ("% X", u); /* { dg-warning "flag" "bad use of space flag" } */
++  printf ("% c", i); /* { dg-warning "flag" "bad use of space flag" } */
++  printf ("% s", s); /* { dg-warning "flag" "bad use of space flag" } */
++  printf ("% p", p); /* { dg-warning "flag" "bad use of space flag" } */
++  printf ("% n", n); /* { dg-warning "flag" "bad use of space flag" } */
++  /* Uses of the # flag.  */
++  printf ("%#o%#x%#X%#e%#E%#f%#g%#G", u, u, u, d, d, d, d, d);
++  printf ("%#d", i); /* { dg-warning "flag" "bad use of # flag" } */
++  printf ("%#i", i); /* { dg-warning "flag" "bad use of # flag" } */
++  printf ("%#u", u); /* { dg-warning "flag" "bad use of # flag" } */
++  printf ("%#c", i); /* { dg-warning "flag" "bad use of # flag" } */
++  printf ("%#s", s); /* { dg-warning "flag" "bad use of # flag" } */
++  printf ("%#p", p); /* { dg-warning "flag" "bad use of # flag" } */
++  printf ("%#n", n); /* { dg-warning "flag" "bad use of # flag" } */
++  /* Uses of the 0 flag.  */
++  printf ("%08d%08i%08o%08u%08x%08X%08e%08E%08f%08g%08G", i, i, u, u, u, u,
++	  d, d, d, d, d);
++  printf ("%0c", i); /* { dg-warning "flag" "bad use of 0 flag" } */
++  printf ("%0s", s); /* { dg-warning "flag" "bad use of 0 flag" } */
++  printf ("%0p", p); /* { dg-warning "flag" "bad use of 0 flag" } */
++  printf ("%0n", n); /* { dg-warning "flag" "bad use of 0 flag" } */
++  /* 0 flag ignored with - flag.  */
++  printf ("%-08d", i); /* { dg-warning "flags|ignored" "0 flag ignored with - flag" } */
++  printf ("%-08i", i); /* { dg-warning "flags|ignored" "0 flag ignored with - flag" } */
++  printf ("%-08o", u); /* { dg-warning "flags|ignored" "0 flag ignored with - flag" } */
++  printf ("%-08u", u); /* { dg-warning "flags|ignored" "0 flag ignored with - flag" } */
++  printf ("%-08x", u); /* { dg-warning "flags|ignored" "0 flag ignored with - flag" } */
++  printf ("%-08X", u); /* { dg-warning "flags|ignored" "0 flag ignored with - flag" } */
++  printf ("%-08e", d); /* { dg-warning "flags|ignored" "0 flag ignored with - flag" } */
++  printf ("%-08E", d); /* { dg-warning "flags|ignored" "0 flag ignored with - flag" } */
++  printf ("%-08f", d); /* { dg-warning "flags|ignored" "0 flag ignored with - flag" } */
++  printf ("%-08g", d); /* { dg-warning "flags|ignored" "0 flag ignored with - flag" } */
++  printf ("%-08G", d); /* { dg-warning "flags|ignored" "0 flag ignored with - flag" } */
++  /* Various tests of bad argument types.  */
++  printf ("%d", l); /* { dg-warning "format" "bad argument types" } */
++  printf ("%ld", i); /* { dg-warning "format" "bad argument types" } */
++  printf ("%s", n); /* { dg-warning "format" "bad argument types" } */
++  printf ("%p", i); /* { dg-warning "format" "bad argument types" } */
++  printf ("%n", p); /* { dg-warning "format" "bad argument types" } */
++  /* With -pedantic, we want some further checks for pointer targets:
++     %p should allow only pointers to void (possibly qualified) and
++     to character types (possibly qualified), but not function pointers
++     or pointers to other types.  (Whether, in fact, character types are
++     allowed here is unclear; see thread on comp.std.c, July 2000 for
++     discussion of the requirements of rules on identical representation,
++     and of the application of the as if rule with the new va_arg
++     allowances in C99 to printf.)  Likewise, we should warn if
++     pointer targets differ in signedness, except in some circumstances
++     for character pointers.  (In C99 we should consider warning for
++     char * or unsigned char * being passed to %hhn, even if strictly
++     legitimate by the standard.)
++  */
++  printf ("%p", foo); /* { dg-warning "format" "bad argument types" } */
++  printf ("%n", un); /* { dg-warning "format" "bad argument types" } */
++  printf ("%p", n); /* { dg-warning "format" "bad argument types" } */
++  /* Allow character pointers with %p.  */
++  printf ("%p%p%p%p", s, ss, us, css);
++  /* %s allows any character type.  */
++  printf ("%s%s%s%s", s, ss, us, css);
++  /* Warning for void * arguments for %s is GCC's historical behavior,
++     and seems useful to keep, even if some standard versions might be
++     read to permit it.
++  */
++  printf ("%s", p); /* { dg-warning "format" "bad argument types" } */
++  /* The historical behavior is to allow signed / unsigned types
++     interchangably as arguments.  For values representable in both types,
++     such usage may be correct.  For now preserve the behavior of GCC
++     in such cases.
++  */
++  printf ("%d", u);
++  /* Wrong number of arguments.  */
++  printf ("%d%d", i); /* { dg-warning "arguments" "wrong number of args" } */
++  printf ("%d", i, i); /* { dg-warning "arguments" "wrong number of args" } */
++  /* Miscellaneous bogus constructions.  */
++  printf (""); /* { dg-warning "zero-length" "warning for empty format" } */
++  printf ("\0"); /* { dg-warning "embedded" "warning for embedded NUL" } */
++  printf ("%d\0", i); /* { dg-warning "embedded" "warning for embedded NUL" } */
++  printf ("%d\0%d", i, i); /* { dg-warning "embedded|too many" "warning for embedded NUL" } */
++  printf (NULL); /* { dg-warning "null" "null format string warning" } */
++  printf ("%"); /* { dg-warning "trailing" "trailing % warning" } */
++  printf ("%++d", i); /* { dg-warning "repeated" "repeated flag warning" } */
++  printf ("%n", cn); /* { dg-warning "constant" "%n with const" } */
++  printf ((const char *)L"foo"); /* { dg-warning "wide" "wide string" } */
++  printf ("%n", (int *)0); /* { dg-warning "null" "%n with NULL" } */
++  printf ("%s", (char *)0); /* { dg-warning "null" "%s with NULL" } */
++}
+diff -r ddadaee88373 gcc/testsuite/gcc.dg/format/ms_c90-printf-2.c
+--- /dev/null	Thu Jan 01 00:00:00 1970 +0000
++++ b/gcc/testsuite/gcc.dg/format/ms_c90-printf-2.c	Mon Jun 02 08:07:23 2008 -0600
+@@ -0,0 +1,25 @@
++/* Test for printf formats.  Formats using C99 features should be rejected
++   outside of C99 mode.
++*/
++/* Origin: Joseph Myers <jsm28@cam.ac.uk> */
++/* { dg-do compile { target { *-*-mingw* } } } */
++/* { dg-options "-std=iso9899:1990 -pedantic -Wformat" } */
++
++#define USE_SYSTEM_FORMATS
++#include "format.h"
++
++void
++foo (int i, double d, llong ll, intmax_t j, size_t z, ptrdiff_t t)
++{
++  /* Some tests already in c90-printf-1.c, e.g. %lf.  */
++  /* The widths hh, ll, j, z, t are new.  */
++  printf ("%hhd", i); /* { dg-warning "unknown|format" "%hh is unsupported" } */
++  printf ("%I64d", ll); /* { dg-warning "length|C" "%I64 in C90" } */
++  printf ("%jd", j); /* { dg-warning "unknown|format" "%j is unsupported" } */
++  printf ("%zu", z); /* { dg-warning "unknown|format" "%z is unsupported" } */
++  printf ("%td", t); /* { dg-warning "unknown|format" "%t is unsupported" } */
++  /* The formats F, a, A are new.  */
++  printf ("%F", d); /* { dg-warning "unknown|format" "%F is unsupported" } */
++  printf ("%a", d); /* { dg-warning "unknown|format" "%a is unsupported" } */
++  printf ("%A", d); /* { dg-warning "unknown|format" "%A is unsupported" } */
++}
+diff -r ddadaee88373 gcc/testsuite/gcc.dg/format/ms_c90-printf-3.c
+--- /dev/null	Thu Jan 01 00:00:00 1970 +0000
++++ b/gcc/testsuite/gcc.dg/format/ms_c90-printf-3.c	Mon Jun 02 08:07:23 2008 -0600
+@@ -0,0 +1,43 @@
++/* Test for printf formats.  Test that the C90 functions get their default
++   attributes in strict C90 mode, but the C99 and gettext functions
++   do not.
++*/
++/* Origin: Joseph Myers <jsm28@cam.ac.uk> */
++/* { dg-do compile { target { *-*-mingw* } } } */
++/* { dg-options "-std=iso9899:1990 -pedantic -Wformat" } */
++
++#define USE_SYSTEM_FORMATS
++#include "format.h"
++
++void
++foo (int i, char *s, size_t n, va_list v0, va_list v1, va_list v2, va_list v3,
++     va_list v4, va_list v5, va_list v6, va_list v7, va_list v8)
++{
++  fprintf (stdout, "%d", i);
++  fprintf (stdout, "%ld", i); /* { dg-warning "format" "fprintf" } */
++  printf ("%d", i);
++  printf ("%ld", i); /* { dg-warning "format" "printf" } */
++  /* The "unlocked" functions shouldn't warn in c90 mode.  */
++  fprintf_unlocked (stdout, "%ld", i);
++  printf_unlocked ("%ld", i);
++  sprintf (s, "%d", i);
++  sprintf (s, "%ld", i); /* { dg-warning "format" "sprintf" } */
++  vfprintf (stdout, "%d", v0);
++  vfprintf (stdout, "%Y", v1); /* { dg-warning "format" "vfprintf" } */
++  vprintf ("%d", v2);
++  vprintf ("%Y", v3); /* { dg-warning "format" "vprintf" } */
++  /* The following used to give a bogus warning.  */
++  vprintf ("%*.*d", v8);   /* { dg-bogus "format" "vprintf" } */
++  vsprintf (s, "%d", v4);
++  vsprintf (s, "%Y", v5); /* { dg-warning "format" "Y is invalid" } */
++  snprintf (s, n, "%d", i);
++  snprintf (s, n, "%ld", i);
++  vsnprintf (s, n, "%d", v6);
++  vsnprintf (s, n, "%Y", v7);
++  printf (gettext ("%d"), i);
++  printf (gettext ("%ld"), i);
++  printf (dgettext ("", "%d"), i);
++  printf (dgettext ("", "%ld"), i);
++  printf (dcgettext ("", "%d", 0), i);
++  printf (dcgettext ("", "%ld", 0), i);
++}
+diff -r ddadaee88373 gcc/testsuite/gcc.dg/format/ms_c90-scanf-1.c
+--- /dev/null	Thu Jan 01 00:00:00 1970 +0000
++++ b/gcc/testsuite/gcc.dg/format/ms_c90-scanf-1.c	Mon Jun 02 08:07:23 2008 -0600
+@@ -0,0 +1,119 @@
++/* Test for scanf formats.  Formats using C90 features, including cases
++   where C90 specifies some aspect of the format to be ignored or where
++   the behavior is undefined.
++*/
++/* Origin: Joseph Myers <jsm28@cam.ac.uk> */
++/* { dg-do compile { target { *-*-mingw* } } } */
++/* { dg-options "-std=iso9899:1990 -pedantic -Wformat" } */
++
++#define USE_SYSTEM_FORMATS
++#include "format.h"
++
++void
++foo (int *ip, unsigned int *uip, short int *hp, unsigned short int *uhp,
++     long int *lp, unsigned long int *ulp, float *fp, double *dp,
++     long double *ldp, char *s, signed char *ss, unsigned char *us,
++     void **pp, int *n, llong *llp, ullong *ullp, wchar_t *ls,
++     const int *cip, const int *cn, const char *cs, const void **ppc,
++     void *const *pcp, short int *hn, long int *ln, void *p, char **sp,
++     volatile void *ppv)
++{
++  /* See ISO/IEC 9899:1990 (E) subclause 7.9.6.2 (pages 134-138).  */
++  /* Basic sanity checks for the different components of a format.  */
++  scanf ("%d", ip);
++  scanf ("%*d");
++  scanf ("%3d", ip);
++  scanf ("%hd", hp);
++  scanf ("%3ld", lp);
++  scanf ("%*3d");
++  scanf ("%d %ld", ip, lp);
++  /* Valid and invalid %% constructions.  */
++  scanf ("%%");
++  scanf ("%*%"); /* { dg-warning "format" "bogus %%" } */
++  scanf ("%*%\n"); /* { dg-warning "format" "bogus %%" } */
++  scanf ("%4%"); /* { dg-warning "format" "bogus %%" } */
++  scanf ("%4%\n"); /* { dg-warning "format" "bogus %%" } */
++  scanf ("%h%"); /* { dg-warning "format" "bogus %%" } */
++  scanf ("%h%\n"); /* { dg-warning "format" "bogus %%" } */
++  /* Valid, invalid and silly assignment-suppression constructions.  */
++  scanf ("%*d%*i%*o%*u%*x%*X%*e%*E%*f%*g%*G%*s%*[abc]%*c%*p");
++  scanf ("%*2d%*8s%*3c");
++  scanf ("%*n", n); /* { dg-warning "suppress" "suppression of %n" } */
++  scanf ("%*hd"); /* { dg-warning "together" "suppression with length" } */
++  /* Valid, invalid and silly width constructions.  */
++  scanf ("%2d%3i%4o%5u%6x%7X%8e%9E%10f%11g%12G%13s%14[abc]%15c%16p",
++	 ip, ip, uip, uip, uip, uip, fp, fp, fp, fp, fp, s, s, s, pp);
++  scanf ("%0d", ip); /* { dg-warning "width" "warning for zero width" } */
++  scanf ("%3n", n); /* { dg-warning "width" "width with %n" } */
++  /* Valid and invalid %h, %l, %L constructions.  */
++  scanf ("%hd%hi%ho%hu%hx%hX%hn", hp, hp, uhp, uhp, uhp, uhp, hn);
++  scanf ("%he", fp); /* { dg-warning "length" "bad use of %h" } */
++  scanf ("%hE", fp); /* { dg-warning "length" "bad use of %h" } */
++  scanf ("%hf", fp); /* { dg-warning "length" "bad use of %h" } */
++  scanf ("%hg", fp); /* { dg-warning "length" "bad use of %h" } */
++  scanf ("%hG", fp); /* { dg-warning "length" "bad use of %h" } */
++  scanf ("%hs", hp);
++  scanf ("%h[ac]", s); /* { dg-warning "length" "bad use of %h" } */
++  scanf ("%hc", hp);
++  scanf ("%hp", pp); /* { dg-warning "length" "bad use of %h" } */
++  scanf ("%h"); /* { dg-warning "conversion lacks type" "bare %h" } */
++  scanf ("%h."); /* { dg-warning "conversion" "bogus %h" } */
++  scanf ("%ld%li%lo%lu%lx%lX%ln", lp, lp, ulp, ulp, ulp, ulp, ln);
++  scanf ("%le%lE%lf%lg%lG", dp, dp, dp, dp, dp);
++  scanf ("%lp", pp); /* { dg-warning "length" "bad use of %l" } */
++  /* These next three formats were added in C94.  */
++  scanf ("%ls", ls); /* { dg-warning "length|C" "bad use of %l" } */
++  scanf ("%l[ac]", ls); /* { dg-warning "length|C" "bad use of %l" } */
++  scanf ("%lc", ls); /* { dg-warning "length|C" "bad use of %l" } */
++  scanf ("%Ld", llp); /* { dg-warning "unknown|format" "%L is unsupported" } */
++  scanf ("%Li", llp); /* { dg-warning "unknown|format" "%L is unsupported" } */
++  scanf ("%Lo", ullp); /* { dg-warning "unknown|format" "%L is unsupported" } */
++  scanf ("%Lu", ullp); /* { dg-warning "unknown|format" "%L is unsupported" } */
++  scanf ("%Lx", ullp); /* { dg-warning "unknown|format" "%L is unsupported" } */
++  scanf ("%LX", ullp); /* { dg-warning "unknown|format" "%L is unsupported" } */
++  scanf ("%Ls", s); /* { dg-warning "unknown|format" "%L is unsupported" } */
++  scanf ("%L[ac]", s); /* { dg-warning "unknown|format" "%L is unsupported" } */
++  scanf ("%Lc", s); /* { dg-warning "unknown|format" "%L is unsupported" } */
++  scanf ("%Lp", pp); /* { dg-warning "unknown|format" "%L is unsupported" } */
++  scanf ("%Ln", n); /* { dg-warning "unknown|format" "%L is unsupported" } */
++  /* Valid uses of each bare conversion.  */
++  scanf ("%d%i%o%u%x%X%e%E%f%g%G%s%[abc]%c%p%n%%", ip, ip, uip, uip, uip,
++	 uip, fp, fp, fp, fp, fp, s, s, s, pp, n);
++  /* Allow other character pointers with %s, %c, %[].  */
++  scanf ("%2s%3s%4c%5c%6[abc]%7[abc]", ss, us, ss, us, ss, us);
++  /* Further tests for %[].  */
++  scanf ("%[%d]%d", s, ip);
++  scanf ("%[^%d]%d", s, ip);
++  scanf ("%[]%d]%d", s, ip);
++  scanf ("%[^]%d]%d", s, ip);
++  scanf ("%[%d]%d", s, ip);
++  scanf ("%[]abcd", s); /* { dg-warning "no closing" "incomplete scanset" } */
++  /* Various tests of bad argument types.  Some of these are only pedantic
++     warnings.
++  */
++  scanf ("%d", lp); /* { dg-warning "format" "bad argument types" } */
++  scanf ("%d", uip); /* { dg-warning "format" "bad argument types" } */
++  scanf ("%d", pp); /* { dg-warning "format" "bad argument types" } */
++  scanf ("%p", ppc); /* { dg-warning "format" "bad argument types" } */
++  scanf ("%p", ppv); /* { dg-warning "format" "bad argument types" } */
++  scanf ("%s", n); /* { dg-warning "format" "bad argument types" } */
++  scanf ("%s", p); /* { dg-warning "format" "bad argument types" } */
++  scanf ("%p", p); /* { dg-warning "format" "bad argument types" } */
++  scanf ("%p", sp); /* { dg-warning "format" "bad argument types" } */
++  /* Tests for writing into constant values.  */
++  scanf ("%d", cip); /* { dg-warning "constant" "%d writing into const" } */
++  scanf ("%n", cn); /* { dg-warning "constant" "%n writing into const" } */
++  scanf ("%s", cs); /* { dg-warning "constant" "%s writing into const" } */
++  scanf ("%p", pcp); /* { dg-warning "constant" "%p writing into const" } */
++  /* Wrong number of arguments.  */
++  scanf ("%d%d", ip); /* { dg-warning "arguments" "wrong number of args" } */
++  scanf ("%d", ip, ip); /* { dg-warning "arguments" "wrong number of args" } */
++  /* Miscellaneous bogus constructions.  */
++  scanf (""); /* { dg-warning "zero-length" "warning for empty format" } */
++  scanf ("\0"); /* { dg-warning "embedded" "warning for embedded NUL" } */
++  scanf ("%d\0", ip); /* { dg-warning "embedded" "warning for embedded NUL" } */
++  scanf ("%d\0%d", ip, ip); /* { dg-warning "embedded|too many" "warning for embedded NUL" } */
++  scanf (NULL); /* { dg-warning "null" "null format string warning" } */
++  scanf ("%"); /* { dg-warning "trailing" "trailing % warning" } */
++  scanf ("%d", (int *)0); /* { dg-warning "null" "writing into NULL" } */
++}
+diff -r ddadaee88373 gcc/testsuite/gcc.dg/format/ms_c90-scanf-2.c
+--- /dev/null	Thu Jan 01 00:00:00 1970 +0000
++++ b/gcc/testsuite/gcc.dg/format/ms_c90-scanf-2.c	Mon Jun 02 08:07:23 2008 -0600
+@@ -0,0 +1,26 @@
++/* Test for scanf formats.  Formats using C99 features should be rejected
++   outside of C99 mode.
++*/
++/* Origin: Joseph Myers <jsm28@cam.ac.uk> */
++/* { dg-do compile { target { *-*-mingw* } } } */
++/* { dg-options "-std=iso9899:1990 -pedantic -Wformat" } */
++
++#define USE_SYSTEM_FORMATS
++#include "format.h"
++
++void
++foo (signed char *hhp, float *fp, llong *llp, intmax_t *jp,
++     size_t *zp, ptrdiff_t *tp)
++{
++  /* Some tests already in c90-scanf-1.c.  */
++  /* The widths hh, ll, j, z, t are new.  */
++  scanf ("%hhd", hhp); /* { dg-warning "unknown|format" "%hh is unsupported" } */
++  scanf ("%I64d", llp); /* { dg-warning "length|C" "%I64 in C90" } */
++  scanf ("%jd", jp); /* { dg-warning "unknown|format" "%j is unsupported" } */
++  scanf ("%zu", zp); /* { dg-warning "unknown|format" "%z is unsupported" } */
++  scanf ("%td", tp); /* { dg-warning "unknown|format" "%t is unsupported" } */
++  /* The formats F, a, A are new.  */
++  scanf ("%F", fp); /* { dg-warning "unknown|format" "%F is unsupported" } */
++  scanf ("%a", fp); /* { dg-warning "unknown|format" "%a is unsupported" } */
++  scanf ("%A", fp); /* { dg-warning "unknown|format" "%A is unsupported" } */
++}
+diff -r ddadaee88373 gcc/testsuite/gcc.dg/format/ms_c90-scanf-3.c
+--- /dev/null	Thu Jan 01 00:00:00 1970 +0000
++++ b/gcc/testsuite/gcc.dg/format/ms_c90-scanf-3.c	Mon Jun 02 08:07:23 2008 -0600
+@@ -0,0 +1,20 @@
++/* Test for scanf formats.  Formats using extensions to the standard
++   should be rejected in strict pedantic mode.
++*/
++/* Origin: Joseph Myers <jsm28@cam.ac.uk> */
++/* { dg-do compile { target { *-*-mingw* } } } */
++/* { dg-options "-std=iso9899:1990 -pedantic -Wformat" } */
++
++#define USE_SYSTEM_FORMATS
++#include "format.h"
++
++void
++foo (char **sp, wchar_t **lsp)
++{
++  /* %a formats for allocation, only recognized in C90 mode, are a
++     GNU extension.
++  */
++  scanf ("%as", sp); /* { dg-warning "flag" "%as is unsupported" } */
++  scanf ("%aS", lsp); /* { dg-warning "format|flag" "%aS is unsupported" } */
++  scanf ("%a[bcd]", sp); /* { dg-warning "flag" "%a[] is unsupported" } */
++}
+diff -r ddadaee88373 gcc/testsuite/gcc.dg/format/ms_c90-scanf-4.c
+--- /dev/null	Thu Jan 01 00:00:00 1970 +0000
++++ b/gcc/testsuite/gcc.dg/format/ms_c90-scanf-4.c	Mon Jun 02 08:07:23 2008 -0600
+@@ -0,0 +1,31 @@
++/* Test for scanf formats.  Test that the C90 functions get their default
++   attributes in strict C90 mode, but the C99 and gettext functions
++   do not.
++*/
++/* Origin: Joseph Myers <jsm28@cam.ac.uk> */
++/* { dg-do compile { target { *-*-mingw* } } } */
++/* { dg-options "-std=iso9899:1990 -pedantic -Wformat" } */
++
++#define USE_SYSTEM_FORMATS
++#include "format.h"
++
++void
++foo (int *ip, char *s, va_list v0, va_list v1, va_list v2, va_list v3,
++     va_list v4, va_list v5)
++{
++  fscanf (stdin, "%d", ip);
++  fscanf (stdin, "%ld", ip); /* { dg-warning "format" "fscanf" } */
++  scanf ("%d", ip);
++  scanf ("%ld", ip); /* { dg-warning "format" "scanf" } */
++  sscanf (s, "%d", ip);
++  sscanf (s, "%ld", ip); /* { dg-warning "format" "sscanf" } */
++  vfscanf (stdin, "%d", v0);
++  vscanf ("%d", v2);
++  vsscanf (s, "%d", v4);
++  scanf (gettext ("%d"), ip);
++  scanf (gettext ("%ld"), ip);
++  scanf (dgettext ("", "%d"), ip);
++  scanf (dgettext ("", "%ld"), ip);
++  scanf (dcgettext ("", "%d", 0), ip);
++  scanf (dcgettext ("", "%ld", 0), ip);
++}
+diff -r ddadaee88373 gcc/testsuite/gcc.dg/format/ms_c90-scanf-5.c
+--- /dev/null	Thu Jan 01 00:00:00 1970 +0000
++++ b/gcc/testsuite/gcc.dg/format/ms_c90-scanf-5.c	Mon Jun 02 08:07:23 2008 -0600
+@@ -0,0 +1,20 @@
++/* Test for scanf formats.  Formats using extensions to the standard
++   should be rejected in strict pedantic mode.
++*/
++/* { dg-do compile { target { *-*-mingw* } } } */
++/* { dg-options "-std=iso9899:1990 -pedantic -Wformat" } */
++
++#define USE_SYSTEM_FORMATS
++#include "format.h"
++
++void
++foo (char **sp, wchar_t **lsp)
++{
++  /* m assignment-allocation modifier, recognized in both C90
++     and C99 modes, is a POSIX and ISO/IEC WDTR 24731-2 extension.  */
++  scanf ("%ms", sp); /* { dg-warning "unknown|format" "%ms is unsupported" } */
++  scanf ("%mS", lsp); /* { dg-warning "unknown|format" "%mS is unsupported" } */
++  scanf ("%mls", lsp); /* { dg-warning "unknown|format" "%mls is unsupported" } */
++  scanf ("%m[bcd]", sp); /* { dg-warning "unknown|format" "%m[] is unsupported" } */
++  scanf ("%ml[bcd]", lsp); /* { dg-warning "unknown|format" "%ml[] is unsupported" } */
++}
+diff -r ddadaee88373 gcc/testsuite/gcc.dg/format/ms_c90-strftime-1.c
+--- /dev/null	Thu Jan 01 00:00:00 1970 +0000
++++ b/gcc/testsuite/gcc.dg/format/ms_c90-strftime-1.c	Mon Jun 02 08:07:23 2008 -0600
+@@ -0,0 +1,20 @@
++/* Test for strftime formats.  Formats using C90 features.  */
++/* Origin: Joseph Myers <jsm28@cam.ac.uk> */
++/* { dg-do compile { target { *-*-mingw* } } } */
++/* { dg-options "-std=iso9899:1990 -pedantic -Wformat -Wformat-y2k" } */
++
++#define USE_SYSTEM_FORMATS
++#include "format.h"
++
++void
++foo (char *s, size_t m, const struct tm *tp)
++{
++  /* See ISO/IEC 9899:1990 (E) subclause 7.12.3.5 (pages 174-175).  */
++  /* Formats which are Y2K-compliant (no 2-digit years).  */
++  strftime (s, m, "%a%A%b%B%d%H%I%j%m%M%p%S%U%w%W%X%Y%Z%%", tp);
++  /* Formats with 2-digit years.  */
++  strftime (s, m, "%y", tp); /* { dg-warning "only last 2" "2-digit year" } */
++  /* Formats with 2-digit years in some locales.  */
++  strftime (s, m, "%c", tp); /* { dg-warning "some locales" "2-digit year" } */
++  strftime (s, m, "%x", tp); /* { dg-warning "some locales" "2-digit year" } */
++}
+diff -r ddadaee88373 gcc/testsuite/gcc.dg/format/ms_c90-strftime-2.c
+--- /dev/null	Thu Jan 01 00:00:00 1970 +0000
++++ b/gcc/testsuite/gcc.dg/format/ms_c90-strftime-2.c	Mon Jun 02 08:07:23 2008 -0600
+@@ -0,0 +1,28 @@
++/* Test for strftime formats.  Rejection of formats using C99 features in
++   pedantic C90 mode.  */
++/* Origin: Joseph Myers <jsm28@cam.ac.uk> */
++/* { dg-do compile { target { *-*-mingw* } } } */
++/* { dg-options "-std=iso9899:1990 -pedantic -Wformat -Wformat-y2k" } */
++
++#define USE_SYSTEM_FORMATS
++#include "format.h"
++
++void
++foo (char *s, size_t m, const struct tm *tp)
++{
++  strftime (s, m, "%C", tp); /* { dg-warning "format" "%C is unsupported" } */
++  strftime (s, m, "%D", tp); /* { dg-warning "format" "%D is unsupported" } */
++  strftime (s, m, "%e", tp); /* { dg-warning "format" "%e is unsupported" } */
++  strftime (s, m, "%F", tp); /* { dg-warning "format" "%F is unsupported" } */
++  strftime (s, m, "%g", tp); /* { dg-warning "format" "%g is unsupported" } */
++  strftime (s, m, "%G", tp); /* { dg-warning "format" "%G is unsupported" } */
++  strftime (s, m, "%h", tp); /* { dg-warning "format" "%h is unsupported" } */
++  strftime (s, m, "%n", tp); /* { dg-warning "format" "%n is unsupported" } */
++  strftime (s, m, "%r", tp); /* { dg-warning "format" "%r is unsupported" } */
++  strftime (s, m, "%R", tp); /* { dg-warning "format" "%R is unsupported" } */
++  strftime (s, m, "%t", tp); /* { dg-warning "format" "%t is unsupported" } */
++  strftime (s, m, "%T", tp); /* { dg-warning "format" "%T is unsupported" } */
++  strftime (s, m, "%u", tp); /* { dg-warning "format" "%u is unsupported" } */
++  strftime (s, m, "%V", tp); /* { dg-warning "format" "%V is unsupported" } */
++  strftime (s, m, "%z", tp); /* { dg-warning "C" "%z not in C90" } */
++}
+diff -r ddadaee88373 gcc/testsuite/gcc.dg/format/ms_c94-printf-1.c
+--- /dev/null	Thu Jan 01 00:00:00 1970 +0000
++++ b/gcc/testsuite/gcc.dg/format/ms_c94-printf-1.c	Mon Jun 02 08:07:23 2008 -0600
+@@ -0,0 +1,19 @@
++/* Test for printf formats.  Changes in C94 to C90.  */
++/* Origin: Joseph Myers <jsm28@cam.ac.uk> */
++/* { dg-do compile { target { *-*-mingw* } } } */
++/* { dg-options "-std=iso9899:199409 -pedantic -Wformat" } */
++
++#define USE_SYSTEM_FORMATS
++#include "format.h"
++
++void
++foo (wint_t lc, wchar_t *ls)
++{
++  /* See ISO/IEC 9899:1990 (E) subclause 7.9.6.1 (pages 131-134),
++     as amended by ISO/IEC 9899:1990/Amd.1:1995 (E) (pages 4-5).
++     We do not repeat here all the C90 format checks, but just verify
++     that %ls and %lc are accepted without warning.
++  */
++  printf ("%lc", lc);
++  printf ("%ls", ls);
++}
+diff -r ddadaee88373 gcc/testsuite/gcc.dg/format/ms_c94-scanf-1.c
+--- /dev/null	Thu Jan 01 00:00:00 1970 +0000
++++ b/gcc/testsuite/gcc.dg/format/ms_c94-scanf-1.c	Mon Jun 02 08:07:23 2008 -0600
+@@ -0,0 +1,18 @@
++/* Test for scanf formats.  Changes in C94 to C90.  */
++/* Origin: Joseph Myers <jsm28@cam.ac.uk> */
++/* { dg-do compile { target { *-*-mingw* } } } */
++/* { dg-options "-std=iso9899:199409 -pedantic -Wformat" } */
++
++#define USE_SYSTEM_FORMATS
++#include "format.h"
++
++void
++foo (wchar_t *ls)
++{
++  /* See ISO/IEC 9899:1990 (E) subclause 7.9.6.2 (pages 134-138),
++     as amended by ISO/IEC 9899:1990/Amd.1:1995 (E) (pages 5-6).
++     We do not repeat here all the C90 format checks, but just verify
++     that %ls, %lc, %l[] are accepted without warning.
++  */
++  scanf ("%lc%ls%l[abc]", ls, ls, ls);
++}
+diff -r ddadaee88373 gcc/testsuite/gcc.dg/format/ms_c99-printf-1.c
+--- /dev/null	Thu Jan 01 00:00:00 1970 +0000
++++ b/gcc/testsuite/gcc.dg/format/ms_c99-printf-1.c	Mon Jun 02 08:07:23 2008 -0600
+@@ -0,0 +1,109 @@
++/* Test for printf formats.  Formats using C99 features, including cases
++   where C99 specifies some aspect of the format to be ignored or where
++   the behavior is undefined.
++*/
++/* Origin: Joseph Myers <jsm28@cam.ac.uk> */
++/* { dg-do compile { target { *-*-mingw* } } } */
++/* { dg-options "-std=iso9899:1999 -pedantic -Wformat" } */
++
++#define USE_SYSTEM_FORMATS
++#include "format.h"
++
++void
++foo (int i, unsigned int u, double d, char *s, void *p, int *n,
++     long double ld, wint_t lc, wchar_t *ls, long long int ll,
++     unsigned long long int ull, signed char *ss, unsigned char *us,
++     long long int *lln, intmax_t j, uintmax_t uj, intmax_t *jn,
++     size_t z, signed_size_t sz, signed_size_t *zn,
++     ptrdiff_t t, ptrdiff_t *tn)
++{
++  /* See ISO/IEC 9899:1999 (E) subclause 7.19.6.1 (pages 273-281).
++     We do not repeat here most of the checks for correct C90 formats
++     or completely broken formats.
++  */
++  /* Valid and invalid %h, %hh, %l, %j, %z, %t, %L constructions.  */
++  printf ("%hf", d); /* { dg-warning "length" "bad use of %h" } */
++  printf ("%hF", d); /* { dg-warning "unknown|format" "bad use of %hF" } */
++  printf ("%he", d); /* { dg-warning "length" "bad use of %h" } */
++  printf ("%hE", d); /* { dg-warning "length" "bad use of %h" } */
++  printf ("%hg", d); /* { dg-warning "length" "bad use of %h" } */
++  printf ("%hG", d); /* { dg-warning "length" "bad use of %h" } */
++  printf ("%ha", d); /* { dg-warning "unknown|format" "bad use of %ha" } */
++  printf ("%hA", d); /* { dg-warning "unknown|format" "bad use of %hA" } */
++  printf ("%hc", i);
++  printf ("%hs", (short *)s);
++  printf ("%hp", p); /* { dg-warning "length" "bad use of %h" } */
++  printf ("%lc", lc);
++  printf ("%ls", ls);
++  printf ("%lp", p); /* { dg-warning "length|C" "bad use of %l" } */
++  /* Valid uses of each bare conversion.  */
++  printf ("%d%i%o%u%x%X%f%e%E%g%G%c%s%p%n%%", i, i, u, u, u, u,
++	  d, d, d, d, d, i, s, p, n);
++  /* Uses of the - flag (valid on all non-%, non-n conversions).  */
++  printf ("%-d%-i%-o%-u%-x%-X%-f%-e%-E%-g%-G%-c%-s%-p", i, i,
++	  u, u, u, u, d, d, d, d, d, i, s, p);
++  printf ("%-n", n); /* { dg-warning "flag" "bad use of %-n" } */
++  /* Uses of the + flag (valid on signed conversions only).  */
++  printf ("%+d%+i%+f%+e%+E%+g%+G\n", i, i, d, d, d, d, d);
++  printf ("%+o", u); /* { dg-warning "flag" "bad use of + flag" } */
++  printf ("%+u", u); /* { dg-warning "flag" "bad use of + flag" } */
++  printf ("%+x", u); /* { dg-warning "flag" "bad use of + flag" } */
++  printf ("%+X", u); /* { dg-warning "flag" "bad use of + flag" } */
++  printf ("%+c", i); /* { dg-warning "flag" "bad use of + flag" } */
++  printf ("%+s", s); /* { dg-warning "flag" "bad use of + flag" } */
++  printf ("%+p", p); /* { dg-warning "flag" "bad use of + flag" } */
++  printf ("%+n", n); /* { dg-warning "flag" "bad use of + flag" } */
++  /* Uses of the space flag (valid on signed conversions only, and ignored
++     with +).
++  */
++  printf ("% +d", i); /* { dg-warning "use of both|ignored" "use of space and + flags" } */
++  printf ("%+ d", i); /* { dg-warning "use of both|ignored" "use of space and + flags" } */
++  printf ("% d% i% f% e% E% g% G\n", i, i, d, d, d, d, d);
++  printf ("% o", u); /* { dg-warning "flag" "bad use of space flag" } */
++  printf ("% u", u); /* { dg-warning "flag" "bad use of space flag" } */
++  printf ("% x", u); /* { dg-warning "flag" "bad use of space flag" } */
++  printf ("% X", u); /* { dg-warning "flag" "bad use of space flag" } */
++  printf ("% c", i); /* { dg-warning "flag" "bad use of space flag" } */
++  printf ("% s", s); /* { dg-warning "flag" "bad use of space flag" } */
++  printf ("% p", p); /* { dg-warning "flag" "bad use of space flag" } */
++  printf ("% n", n); /* { dg-warning "flag" "bad use of space flag" } */
++  /* Uses of the # flag.  */
++  printf ("%#o%#x%#X%#e%#E%#f%#g%#G", u, u, u, d, d, d,
++	  d, d);
++  printf ("%#d", i); /* { dg-warning "flag" "bad use of # flag" } */
++  printf ("%#i", i); /* { dg-warning "flag" "bad use of # flag" } */
++  printf ("%#u", u); /* { dg-warning "flag" "bad use of # flag" } */
++  printf ("%#c", i); /* { dg-warning "flag" "bad use of # flag" } */
++  printf ("%#s", s); /* { dg-warning "flag" "bad use of # flag" } */
++  printf ("%#p", p); /* { dg-warning "flag" "bad use of # flag" } */
++  printf ("%#n", n); /* { dg-warning "flag" "bad use of # flag" } */
++  /* Uses of the 0 flag.  */
++  printf ("%08d%08i%08o%08u%08x%08X%08e%08E%08f%08g%08G", i, i,
++	  u, u, u, u, d, d, d, d, d);
++  printf ("%0c", i); /* { dg-warning "flag" "bad use of 0 flag" } */
++  printf ("%0s", s); /* { dg-warning "flag" "bad use of 0 flag" } */
++  printf ("%0p", p); /* { dg-warning "flag" "bad use of 0 flag" } */
++  printf ("%0n", n); /* { dg-warning "flag" "bad use of 0 flag" } */
++  /* 0 flag ignored with - flag.  */
++  printf ("%-08d", i); /* { dg-warning "flags|ignored" "0 flag ignored with - flag" } */
++  printf ("%-08i", i); /* { dg-warning "flags|ignored" "0 flag ignored with - flag" } */
++  printf ("%-08o", u); /* { dg-warning "flags|ignored" "0 flag ignored with - flag" } */
++  printf ("%-08u", u); /* { dg-warning "flags|ignored" "0 flag ignored with - flag" } */
++  printf ("%-08x", u); /* { dg-warning "flags|ignored" "0 flag ignored with - flag" } */
++  printf ("%-08X", u); /* { dg-warning "flags|ignored" "0 flag ignored with - flag" } */
++  printf ("%-08e", d); /* { dg-warning "flags|ignored" "0 flag ignored with - flag" } */
++  printf ("%-08E", d); /* { dg-warning "flags|ignored" "0 flag ignored with - flag" } */
++  printf ("%-08f", d); /* { dg-warning "flags|ignored" "0 flag ignored with - flag" } */
++  printf ("%-08F", d); /* { dg-warning "unknown|format" "0 flag ignored with - flag" } */
++  printf ("%-08g", d); /* { dg-warning "flags|ignored" "0 flag ignored with - flag" } */
++  printf ("%-08G", d); /* { dg-warning "flags|ignored" "0 flag ignored with - flag" } */
++  printf ("%-08a", d); /* { dg-warning "unknown|format" "0 flag ignored with - flag" } */
++  printf ("%-08A", d); /* { dg-warning "unknown|format" "0 flag ignored with - flag" } */
++  /* Various tests of bad argument types.  Mostly covered in c90-printf-1.c;
++     here just test for pointer target sign with %hhn.  (Probably allowed
++     by the standard, but a bad idea, so GCC should diagnose if what
++     is used is not signed char *.)
++  */
++  printf ("%hhn", s); /* { dg-warning "unknown|format" "%hhn is unsupported" } */
++  printf ("%hhn", us); /* { dg-warning "unknown|format" "%hhn is unsupported" } */
++}
+diff -r ddadaee88373 gcc/testsuite/gcc.dg/format/ms_c99-printf-2.c
+--- /dev/null	Thu Jan 01 00:00:00 1970 +0000
++++ b/gcc/testsuite/gcc.dg/format/ms_c99-printf-2.c	Mon Jun 02 08:07:23 2008 -0600
+@@ -0,0 +1,32 @@
++/* Test for printf formats.  Formats using extensions to the standard
++   should be rejected in strict pedantic mode.
++*/
++/* Origin: Joseph Myers <jsm28@cam.ac.uk> */
++/* { dg-do compile { target { *-*-mingw* } } } */
++/* { dg-options "-std=iso9899:1999 -pedantic -Wformat" } */
++
++#define USE_SYSTEM_FORMATS
++#include "format.h"
++
++void
++foo (int i, long long ll, size_t z, wint_t lc, wchar_t *ls)
++{
++  /* The length modifiers q, Z and L as applied to integer formats are
++     extensions.
++  */
++  printf ("%qd", ll); /* { dg-warning "unknown|format" "%q length is unsupported" } */
++  printf ("%Ld", ll); /* { dg-warning "unknown|format" "%L length is unsupported" } */
++  printf ("%Zd", z); /* { dg-warning "unknown|format" "%Z length is unsupported" } */
++  /* The conversion specifiers C and S are X/Open extensions; the
++     conversion specifier m is a GNU extension.
++  */
++  printf ("%m"); /* { dg-warning "unknown" "printf %m is unsupported" } */
++  printf ("%C", lc); /* { dg-warning "C" "printf %C" } */
++  printf ("%S", ls); /* { dg-warning "C" "printf %S" } */
++  /* The flag character ', and the use of operand number $ formats, are
++     X/Open extensions.
++  */
++  printf ("%'d", i); /* { dg-warning "C" "printf ' flag" } */
++  printf ("%1$d", i); /* { dg-warning "C" "printf $ format" } */
++  printf ("%Ix", z); /* { dg-warning "C" "printf I format" } */
++}
+diff -r ddadaee88373 gcc/testsuite/gcc.dg/format/ms_c99-printf-3.c
+--- /dev/null	Thu Jan 01 00:00:00 1970 +0000
++++ b/gcc/testsuite/gcc.dg/format/ms_c99-printf-3.c	Mon Jun 02 08:07:23 2008 -0600
+@@ -0,0 +1,40 @@
++/* Test for printf formats.  Test that the C99 functions get their default
++   attributes in strict C99 mode, but the gettext functions do not.
++*/
++/* Origin: Joseph Myers <jsm28@cam.ac.uk> */
++/* { dg-do compile { target { *-*-mingw* } } } */
++/* { dg-options "-std=iso9899:1999 -pedantic -Wformat" } */
++
++#define USE_SYSTEM_FORMATS
++#include "format.h"
++
++void
++foo (int i, char *s, size_t n, va_list v0, va_list v1, va_list v2, va_list v3,
++     va_list v4, va_list v5, va_list v6, va_list v7)
++{
++  fprintf (stdout, "%d", i);
++  fprintf (stdout, "%ld", i); /* { dg-warning "format" "fprintf" } */
++  printf ("%d", i);
++  printf ("%ld", i); /* { dg-warning "format" "printf" } */
++  /* The "unlocked" functions shouldn't warn in c99 mode.  */
++  fprintf_unlocked (stdout, "%ld", i);
++  printf_unlocked ("%ld", i);
++  sprintf (s, "%d", i);
++  sprintf (s, "%ld", i); /* { dg-warning "format" "sprintf" } */
++  snprintf (s, n, "%d", i);
++  snprintf (s, n, "%ld", i); /* { dg-warning "format" "snprintf" } */
++  vfprintf (stdout, "%d", v0);
++  vfprintf (stdout, "%Y", v1); /* { dg-warning "format" "vfprintf" } */
++  vprintf ("%d", v0);
++  vprintf ("%Y", v1); /* { dg-warning "format" "vprintf" } */
++  vsprintf (s, "%d", v0);
++  vsprintf (s, "%Y", v1); /* { dg-warning "format" "vsprintf" } */
++  vsnprintf (s, n, "%d", v0);
++  vsnprintf (s, n, "%Y", v1); /* { dg-warning "format" "vsnprintf" } */
++  printf (gettext ("%d"), i);
++  printf (gettext ("%ld"), (long) i);
++  printf (dgettext ("", "%d"), i);
++  printf (dgettext ("", "%ld"), (long) i);
++  printf (dcgettext ("", "%d", 0), i);
++  printf (dcgettext ("", "%ld", 0), (long) i);
++}
+diff -r ddadaee88373 gcc/testsuite/gcc.dg/format/ms_c99-scanf-1.c
+--- /dev/null	Thu Jan 01 00:00:00 1970 +0000
++++ b/gcc/testsuite/gcc.dg/format/ms_c99-scanf-1.c	Mon Jun 02 08:07:23 2008 -0600
+@@ -0,0 +1,63 @@
++/* Test for scanf formats.  Formats using C99 features, including cases
++   where C99 specifies some aspect of the format to be ignored or where
++   the behavior is undefined.
++*/
++/* Origin: Joseph Myers <jsm28@cam.ac.uk> */
++/* { dg-do compile { target { *-*-mingw* } } } */
++/* { dg-options "-std=iso9899:1999 -pedantic -Wformat" } */
++
++#define USE_SYSTEM_FORMATS
++#include "format.h"
++
++void
++foo (int *ip, unsigned int *uip, short int *hp, unsigned short int *uhp,
++     signed char *hhp, unsigned char *uhhp, long int *lp,
++     unsigned long int *ulp, float *fp, double *dp, long double *ldp, char *s,
++     void **pp, int *n, long long *llp, unsigned long long *ullp, wchar_t *ls,
++     short int *hn, signed char *hhn, long int *ln, long long int *lln,
++     intmax_t *jp, uintmax_t *ujp, intmax_t *jn, size_t *zp,
++     signed_size_t *szp, signed_size_t *zn, ptrdiff_t *tp,
++     unsigned_ptrdiff_t *utp, ptrdiff_t *tn)
++{
++  /* See ISO/IEC 9899:1999 (E) subclause 7.19.6.2 (pages 281-288).
++     We do not repeat here most of the checks for correct C90 formats
++     or completely broken formats.
++  */
++  /* Valid, invalid and silly assignment-suppression
++     and width constructions.
++  */
++  scanf ("%*d%*i%*o%*u%*x%*X%*e%*E%*f%*g%*G%*s%*[abc]%*c%*p");
++  scanf ("%*2d%*8s%*3c");
++  scanf ("%*n", n); /* { dg-warning "suppress" "suppression of %n" } */
++  scanf ("%*hd"); /* { dg-warning "together" "suppression with length" } */
++  scanf ("%2d%3i%4o%5u%6x%7X%10e%11E%12f%14g%15G%16s%3[abc]%4c%5p",
++	 ip, ip, uip, uip, uip, uip, fp, fp, fp, fp, fp,
++	 s, s, s, pp);
++  scanf ("%0d", ip); /* { dg-warning "width" "warning for zero width" } */
++  scanf ("%3n", n); /* { dg-warning "width" "width with %n" } */
++  /* Valid and invalid %h, %hh, %l, %j, %z, %t, %L constructions.  */
++  scanf ("%hd%hi%ho%hu%hx%hX%hn", hp, hp, uhp, uhp, uhp, uhp, hn);
++  scanf ("%he", fp); /* { dg-warning "length" "bad use of %h" } */
++  scanf ("%hE", fp); /* { dg-warning "length" "bad use of %h" } */
++  scanf ("%hf", fp); /* { dg-warning "length" "bad use of %h" } */
++  scanf ("%hg", fp); /* { dg-warning "length" "bad use of %h" } */
++  scanf ("%hG", fp); /* { dg-warning "length" "bad use of %h" } */
++  scanf ("%hs", hp);
++  scanf ("%h[ac]", s); /* { dg-warning "length" "bad use of %h" } */
++  scanf ("%hc", (short *)s);
++  scanf ("%hp", pp); /* { dg-warning "length" "bad use of %h" } */
++  scanf ("%hhd", hhp); /* { dg-warning "unknown|format" "%hh is unsupported" } */
++  scanf ("%ld%li%lo%lu%lx%lX%ln", lp, lp, ulp, ulp, ulp, ulp, ln);
++  scanf ("%le%lE%lf%lg%lG", dp, dp, dp, dp, dp);
++  scanf ("%lp", pp); /* { dg-warning "length" "bad use of %l" } */
++  scanf ("%ls", ls);
++  scanf ("%l[ac]", ls);
++  scanf ("%lc", ls);
++  scanf ("%jd", jp); /* { dg-warning "unknown|format" "%j not supported" } */
++  scanf ("%zd", zp); /* { dg-warning "unknown|format" "%z not supported" } */
++  scanf ("%td", tp); /* { dg-warning "unknown|format" "%t not supported" } */
++  scanf ("%Lf", llp); /* { dg-warning "unknown|format" "bad use of %L is not supported" } */
++  /* Valid uses of each bare conversion.  */
++  scanf ("%d%i%o%u%x%X%e%E%f%g%G%s%[abc]%c%p%n%%", ip, ip, uip, uip, uip,
++         uip, fp, fp, fp, fp, fp, s, s, s, pp, n);
++}
+diff -r ddadaee88373 gcc/testsuite/gcc.dg/format/ms_c99-scanf-2.c
+--- /dev/null	Thu Jan 01 00:00:00 1970 +0000
++++ b/gcc/testsuite/gcc.dg/format/ms_c99-scanf-2.c	Mon Jun 02 08:07:23 2008 -0600
+@@ -0,0 +1,27 @@
++/* Test for scanf formats.  Formats using extensions to the standard
++   should be rejected in strict pedantic mode.
++*/
++/* Origin: Joseph Myers <jsm28@cam.ac.uk> */
++/* { dg-do compile { target { *-*-mingw* } } } */
++/* { dg-options "-std=iso9899:1999 -pedantic -Wformat" } */
++
++#define USE_SYSTEM_FORMATS
++#include "format.h"
++
++void
++foo (int *ip, long long int *llp, wchar_t *ls)
++{
++  /* The length modifiers q and L as applied to integer formats are
++     extensions.
++  */
++  scanf ("%qd", llp); /* { dg-warning "unknown|format" "%q is unsupported" } */
++  scanf ("%Ld", llp); /* { dg-warning "unknown|format" "%L is unsupported" } */
++  /* The conversion specifiers C and S are X/Open extensions.  */
++  scanf ("%C", ls); /* { dg-warning "C" "scanf %C" } */
++  scanf ("%S", ls); /* { dg-warning "C" "scanf %S" } */
++  /* The use of operand number $ formats is an X/Open extension.  */
++  scanf ("%1$d", ip); /* { dg-warning "C" "scanf $ format" } */
++  /* glibc also supports flags ' and I on scanf formats as an extension.  */
++  scanf ("%'d", ip); /* { dg-warning "C" "scanf ' flag" } */
++  scanf ("%Id", (ssize_t *)ip); /* { dg-warning "C" "scanf I flag" } */
++}
+diff -r ddadaee88373 gcc/testsuite/gcc.dg/format/ms_c99-scanf-3.c
+--- /dev/null	Thu Jan 01 00:00:00 1970 +0000
++++ b/gcc/testsuite/gcc.dg/format/ms_c99-scanf-3.c	Mon Jun 02 08:07:23 2008 -0600
+@@ -0,0 +1,33 @@
++/* Test for scanf formats.  Test that the C99 functions get their default
++   attributes in strict C99 mode, but the gettext functions do not.
++*/
++/* Origin: Joseph Myers <jsm28@cam.ac.uk> */
++/* { dg-do compile { target { *-*-mingw* } } } */
++/* { dg-options "-std=iso9899:1999 -pedantic -Wformat" } */
++
++#define USE_SYSTEM_FORMATS
++#include "format.h"
++
++void
++foo (int *ip, char *s, va_list v0, va_list v1, va_list v2, va_list v3,
++     va_list v4, va_list v5)
++{
++  fscanf (stdin, "%d", ip);
++  fscanf (stdin, "%ld", ip); /* { dg-warning "format" "fscanf" } */
++  scanf ("%d", ip);
++  scanf ("%ld", ip); /* { dg-warning "format" "scanf" } */
++  sscanf (s, "%d", ip);
++  sscanf (s, "%ld", ip); /* { dg-warning "format" "sscanf" } */
++  vfscanf (stdin, "%d", v0);
++  vfscanf (stdin, "%Y", v1); /* { dg-warning "format" "vfscanf" } */
++  vscanf ("%d", v2);
++  vscanf ("%Y", v3); /* { dg-warning "format" "vscanf" } */
++  vsscanf (s, "%d", v4);
++  vsscanf (s, "%Y", v5); /* { dg-warning "format" "vsscanf" } */
++  scanf (gettext ("%d"), ip);
++  scanf (gettext ("%ld"), ip);
++  scanf (dgettext ("", "%d"), ip);
++  scanf (dgettext ("", "%ld"), ip);
++  scanf (dcgettext ("", "%d", 0), ip);
++  scanf (dcgettext ("", "%ld", 0), ip);
++}
+diff -r ddadaee88373 gcc/testsuite/gcc.dg/format/ms_c99-scanf-4.c
+--- /dev/null	Thu Jan 01 00:00:00 1970 +0000
++++ b/gcc/testsuite/gcc.dg/format/ms_c99-scanf-4.c	Mon Jun 02 08:07:23 2008 -0600
+@@ -0,0 +1,20 @@
++/* Test for scanf formats.  Formats using extensions to the standard
++   should be rejected in strict pedantic mode.
++*/
++/* { dg-do compile { target { *-*-mingw* } } } */
++/* { dg-options "-std=iso9899:1999 -pedantic -Wformat" } */
++
++#define USE_SYSTEM_FORMATS
++#include "format.h"
++
++void
++foo (char **sp, wchar_t **lsp)
++{
++  /* m assignment-allocation modifier, recognized in both C90
++     and C99 modes, is a POSIX and ISO/IEC WDTR 24731-2 extension.  */
++  scanf ("%ms", sp); /* { dg-warning "unknown|format" "%ms is unsupported" } */
++  scanf ("%mS", lsp); /* { dg-warning "unknown|format" "%mS is unsupported" } */
++  scanf ("%mls", lsp); /* { dg-warning "unknown|format" "%mls is unsupported" } */
++  scanf ("%m[bcd]", sp); /* { dg-warning "unknown|format" "%m[] is unsupported" } */
++  scanf ("%ml[bcd]", lsp); /* { dg-warning "unknown|format" "%ml[] is unsupported" } */
++}
+diff -r ddadaee88373 gcc/testsuite/gcc.dg/format/ms_c99-strftime-1.c
+--- /dev/null	Thu Jan 01 00:00:00 1970 +0000
++++ b/gcc/testsuite/gcc.dg/format/ms_c99-strftime-1.c	Mon Jun 02 08:07:23 2008 -0600
+@@ -0,0 +1,20 @@
++/* Test for strftime formats.  Formats using C99 features.  */
++/* Origin: Joseph Myers <jsm28@cam.ac.uk> */
++/* { dg-do compile { target { *-*-mingw* } } } */
++/* { dg-options "-std=iso9899:1999 -pedantic -Wformat -Wformat-y2k" } */
++
++#define USE_SYSTEM_FORMATS
++#include "format.h"
++
++void
++foo (char *s, size_t m, const struct tm *tp)
++{
++  /* See ISO/IEC 9899:1990 (E) subclause 7.12.3.5 (pages 174-175).  */
++  /* Formats which are Y2K-compliant (no 2-digit years).  */
++  strftime (s, m, "%a%A%b%B%d%H%I%j%m%M%p%S%U%w%W%X%Y%z%Z%%", tp);
++  /* Formats with 2-digit years.  */
++  strftime (s, m, "%y", tp); /* { dg-warning "only last 2" "2-digit year" } */
++  /* Formats with 2-digit years in some locales.  */
++  strftime (s, m, "%c", tp); /* { dg-warning "some locales" "2-digit year" } */
++  strftime (s, m, "%x", tp); /* { dg-warning "some locales" "2-digit year" } */
++}
+diff -r ddadaee88373 gcc/testsuite/gcc.dg/format/ms_c99-strftime-2.c
+--- /dev/null	Thu Jan 01 00:00:00 1970 +0000
++++ b/gcc/testsuite/gcc.dg/format/ms_c99-strftime-2.c	Mon Jun 02 08:07:23 2008 -0600
+@@ -0,0 +1,20 @@
++/* Test for strftime formats.  Rejection of extensions in pedantic mode.  */
++/* Origin: Joseph Myers <jsm28@cam.ac.uk> */
++/* { dg-do compile { target { *-*-mingw* } } } */
++/* { dg-options "-std=iso9899:1999 -pedantic -Wformat" } */
++
++#define USE_SYSTEM_FORMATS
++#include "format.h"
++
++void
++foo (char *s, size_t m, const struct tm *tp)
++{
++  /* %P is a lowercase version of %p.  */
++  strftime (s, m, "%P", tp); /* { dg-warning "unknown" "strftime %P" } */
++  /* %k is %H but padded with a space rather than 0 if necessary.  */
++  strftime (s, m, "%k", tp); /* { dg-warning "unknown" "strftime %k" } */
++  /* %l is %I but padded with a space rather than 0 if necessary.  */
++  strftime (s, m, "%l", tp); /* { dg-warning "unknown" "strftime %l" } */
++  /* %s is the number of seconds since the Epoch.  */
++  strftime (s, m, "%s", tp); /* { dg-warning "unknown" "strftime %s" } */
++}
+diff -r ddadaee88373 gcc/testsuite/gcc.dg/format/ms_cast-1.c
+--- /dev/null	Thu Jan 01 00:00:00 1970 +0000
++++ b/gcc/testsuite/gcc.dg/format/ms_cast-1.c	Mon Jun 02 08:07:23 2008 -0600
+@@ -0,0 +1,17 @@
++/* Test for strings cast through integer types: should not be treated
++   as format strings unless the types are of the same width as
++   pointers (intptr_t or similar).  */
++/* Origin: Joseph Myers <joseph@codesourcery.com> */
++/* { dg-do compile { target { *-*-mingw* } } } */
++/* { dg-options "-Wformat" } */
++
++#define USE_SYSTEM_FORMATS
++#include "format.h"
++
++void
++f (int x)
++{
++  printf("%s", x); /* { dg-warning "format" } */
++  printf((char *)(size_t)"%s", x); /* { dg-warning "format" } */
++  printf((char *)(char)"%s", x); /* { dg-warning "cast from pointer to integer of different size" } */
++}
+diff -r ddadaee88373 gcc/testsuite/gcc.dg/format/ms_miss-1.c
+--- /dev/null	Thu Jan 01 00:00:00 1970 +0000
++++ b/gcc/testsuite/gcc.dg/format/ms_miss-1.c	Mon Jun 02 08:07:23 2008 -0600
+@@ -0,0 +1,40 @@
++/* Test for warnings for missing format attributes.  */
++/* Origin: Joseph Myers <jsm28@cam.ac.uk> */
++/* { dg-do compile { target { *-*-mingw* } } } */
++/* { dg-options "-std=gnu99 -Wmissing-format-attribute" } */
++
++#define USE_SYSTEM_FORMATS
++#include "format.h"
++
++void
++foo (const char *fmt, ...)
++{
++  va_list ap;
++  va_start (ap, fmt);
++  vprintf (fmt, ap); /* { dg-warning "candidate" "printf attribute warning" } */
++  va_end (ap);
++}
++
++void
++bar (const char *fmt, ...)
++{
++  va_list ap;
++  va_start (ap, fmt);
++  vscanf (fmt, ap); /* { dg-warning "candidate" "scanf attribute warning" } */
++  va_end (ap);
++}
++
++__attribute__((__format__(__ms_printf__, 1, 2))) void
++foo2 (const char *fmt, ...)
++{
++  va_list ap;
++  va_start (ap, fmt);
++  vprintf (fmt, ap);
++  va_end (ap);
++}
++
++void
++vfoo (const char *fmt, va_list arg)
++{
++  vprintf (fmt, arg); /* { dg-warning "candidate" "printf attribute warning 2" } */
++}
+diff -r ddadaee88373 gcc/testsuite/gcc.dg/format/ms_miss-2.c
+--- /dev/null	Thu Jan 01 00:00:00 1970 +0000
++++ b/gcc/testsuite/gcc.dg/format/ms_miss-2.c	Mon Jun 02 08:07:23 2008 -0600
+@@ -0,0 +1,17 @@
++/* Test for warnings for missing format attributes.  Don't warn if no
++   relevant parameters for a format attribute; see c/1017.  */
++/* Origin: Joseph Myers <jsm28@cam.ac.uk> */
++/* { dg-do compile { target { *-*-mingw* } } } */
++/* { dg-options "-std=gnu99 -Wmissing-format-attribute" } */
++
++#define USE_SYSTEM_FORMATS
++#include "format.h"
++
++void
++foo (int i, ...)
++{
++  va_list ap;
++  va_start (ap, i);
++  vprintf ("Foo %s bar %s", ap); /* { dg-bogus "candidate" "bogus printf attribute warning" } */
++  va_end (ap);
++}
+diff -r ddadaee88373 gcc/testsuite/gcc.dg/format/ms_miss-3.c
+--- /dev/null	Thu Jan 01 00:00:00 1970 +0000
++++ b/gcc/testsuite/gcc.dg/format/ms_miss-3.c	Mon Jun 02 08:07:23 2008 -0600
+@@ -0,0 +1,27 @@
++/* Test warnings for missing format attributes on function pointers.  */
++/* Origin: Kaveh Ghazi <ghazi@caip.rutgers.edu> */
++/* { dg-do compile { target { *-*-mingw* } } } */
++/* { dg-options "-std=gnu99 -Wmissing-format-attribute" } */
++
++#define USE_SYSTEM_FORMATS
++#include "format.h"
++
++typedef void (*noattr_t) (const char *, ...);
++typedef noattr_t __attribute__ ((__format__(__ms_printf__, 1, 2))) attr_t;
++
++typedef void (*vnoattr_t) (const char *, va_list);
++typedef vnoattr_t __attribute__ ((__format__(__ms_printf__, 1, 0))) vattr_t;
++
++void
++foo1 (noattr_t na, attr_t a, vnoattr_t vna, vattr_t va)
++{
++  noattr_t na1 = na;
++  noattr_t na2 = a; /* { dg-warning "candidate" "initialization warning" } */
++  attr_t a1 = na;
++  attr_t a2 = a;
++
++  vnoattr_t vna1 = vna;
++  vnoattr_t vna2 = va; /* { dg-warning "candidate" "initialization warning" } */
++  vattr_t va1 = vna;
++  vattr_t va2 = va;
++}
+diff -r ddadaee88373 gcc/testsuite/gcc.dg/format/ms_miss-4.c
+--- /dev/null	Thu Jan 01 00:00:00 1970 +0000
++++ b/gcc/testsuite/gcc.dg/format/ms_miss-4.c	Mon Jun 02 08:07:23 2008 -0600
+@@ -0,0 +1,33 @@
++/* Test warnings for missing format attributes on function pointers.  */
++/* Origin: Kaveh Ghazi <ghazi@caip.rutgers.edu> */
++/* { dg-do compile { target { *-*-mingw* } } } */
++/* { dg-options "-std=gnu99 -Wmissing-format-attribute" } */
++
++#define USE_SYSTEM_FORMATS
++#include "format.h"
++
++typedef void (*noattr_t) (const char *, ...);
++typedef noattr_t __attribute__ ((__format__(__ms_printf__, 1, 2))) attr_t;
++
++typedef void (*vnoattr_t) (const char *, va_list);
++typedef vnoattr_t __attribute__ ((__format__(__ms_printf__, 1, 0))) vattr_t;
++
++void
++foo1 (noattr_t na, attr_t a, vnoattr_t vna, vattr_t va)
++{
++  noattr_t na1, na2;
++  attr_t a1, a2;
++
++  vnoattr_t vna1, vna2;
++  vattr_t va1, va2;
++
++  na1 = na;
++  na2 = a; /* { dg-warning "candidate" "assignment warning" } */
++  a1 = na;
++  a2 = a;
++
++  vna1 = vna;
++  vna2 = va; /* { dg-warning "candidate" "assignment warning" } */
++  va1 = vna;
++  va1 = va;
++}
+diff -r ddadaee88373 gcc/testsuite/gcc.dg/format/ms_miss-5.c
+--- /dev/null	Thu Jan 01 00:00:00 1970 +0000
++++ b/gcc/testsuite/gcc.dg/format/ms_miss-5.c	Mon Jun 02 08:07:23 2008 -0600
+@@ -0,0 +1,49 @@
++/* Test warnings for missing format attributes on function pointers.  */
++/* Origin: Kaveh Ghazi <ghazi@caip.rutgers.edu> */
++/* { dg-do compile { target { *-*-mingw* } } } */
++/* { dg-options "-std=gnu99 -Wmissing-format-attribute" } */
++
++#define USE_SYSTEM_FORMATS
++#include "format.h"
++
++typedef void (*noattr_t) (const char *, ...);
++typedef noattr_t __attribute__ ((__format__(__ms_printf__, 1, 2))) attr_t;
++
++typedef void (*vnoattr_t) (const char *, va_list);
++typedef vnoattr_t __attribute__ ((__format__(__ms_printf__, 1, 0))) vattr_t;
++
++noattr_t
++foo1 (noattr_t na, attr_t a, int i)
++{
++  if (i)
++    return na;
++  else
++    return a; /* { dg-warning "candidate" "return type warning" } */
++}
++
++attr_t
++foo2 (noattr_t na, attr_t a, int i)
++{
++  if (i)
++    return na;
++  else
++    return a;
++}
++
++vnoattr_t
++foo3 (vnoattr_t vna, vattr_t va, int i)
++{
++  if (i)
++    return vna;
++  else
++    return va; /* { dg-warning "candidate" "return type warning" } */
++}
++
++vattr_t
++foo4 (vnoattr_t vna, vattr_t va, int i)
++{
++  if (i)
++    return vna;
++  else
++    return va;
++}
+diff -r ddadaee88373 gcc/testsuite/gcc.dg/format/ms_miss-6.c
+--- /dev/null	Thu Jan 01 00:00:00 1970 +0000
++++ b/gcc/testsuite/gcc.dg/format/ms_miss-6.c	Mon Jun 02 08:07:23 2008 -0600
+@@ -0,0 +1,32 @@
++/* Test warnings for missing format attributes on function pointers.  */
++/* Origin: Kaveh Ghazi <ghazi@caip.rutgers.edu> */
++/* { dg-do compile { target { *-*-mingw* } } } */
++/* { dg-options "-std=gnu99 -Wmissing-format-attribute" } */
++
++#define USE_SYSTEM_FORMATS
++#include "format.h"
++
++typedef void (*noattr_t) (const char *, ...);
++typedef noattr_t __attribute__ ((__format__(__ms_printf__, 1, 2))) attr_t;
++
++typedef void (*vnoattr_t) (const char *, va_list);
++typedef vnoattr_t __attribute__ ((__format__(__ms_printf__, 1, 0))) vattr_t;
++
++extern void foo1 (noattr_t);
++extern void foo2 (attr_t);
++extern void foo3 (vnoattr_t);
++extern void foo4 (vattr_t);
++
++void
++foo (noattr_t na, attr_t a, vnoattr_t vna, vattr_t va)
++{
++  foo1 (na);
++  foo1 (a); /* { dg-warning "candidate" "parameter passing warning" } */
++  foo2 (na);
++  foo2 (a);
++
++  foo3 (vna);
++  foo3 (va); /* { dg-warning "candidate" "parameter passing warning" } */
++  foo4 (vna);
++  foo4 (va);
++}
+diff -r ddadaee88373 gcc/testsuite/gcc.dg/format/ms_multattr-1.c
+--- /dev/null	Thu Jan 01 00:00:00 1970 +0000
++++ b/gcc/testsuite/gcc.dg/format/ms_multattr-1.c	Mon Jun 02 08:07:23 2008 -0600
+@@ -0,0 +1,51 @@
++/* Test for multiple format attributes.  Test for printf and scanf attributes
++   together.  */
++/* Origin: Joseph Myers <jsm28@cam.ac.uk> */
++/* { dg-do compile { target { *-*-mingw* } } } */
++/* { dg-options "-std=gnu99 -Wformat" } */
++
++#define USE_SYSTEM_FORMATS
++#include "format.h"
++
++/* If we specify multiple attributes for a single function, they should
++   all apply.  This should apply whether they are on the same declaration
++   or on different declarations.  */
++
++extern void my_vprintf_scanf (const char *, va_list, const char *, ...)
++     __attribute__((__format__(__ms_printf__, 1, 0)))
++     __attribute__((__format__(__ms_scanf__, 3, 4)));
++
++extern void my_vprintf_scanf2 (const char *, va_list, const char *, ...)
++     __attribute__((__format__(__ms_scanf__, 3, 4)))
++     __attribute__((__format__(__ms_printf__, 1, 0)));
++
++extern void my_vprintf_scanf3 (const char *, va_list, const char *, ...)
++     __attribute__((__format__(__ms_printf__, 1, 0)));
++extern void my_vprintf_scanf3 (const char *, va_list, const char *, ...)
++     __attribute__((__format__(__ms_scanf__, 3, 4)));
++
++extern void my_vprintf_scanf4 (const char *, va_list, const char *, ...)
++     __attribute__((__format__(__ms_scanf__, 3, 4)));
++extern void my_vprintf_scanf4 (const char *, va_list, const char *, ...)
++     __attribute__((__format__(__ms_printf__, 1, 0)));
++
++void
++foo (va_list ap, int *ip, long *lp)
++{
++  my_vprintf_scanf ("%d", ap, "%d", ip);
++  my_vprintf_scanf ("%d", ap, "%ld", lp);
++  my_vprintf_scanf ("%", ap, "%d", ip); /* { dg-warning "format" "printf" } */
++  my_vprintf_scanf ("%d", ap, "%ld", ip); /* { dg-warning "format" "scanf" } */
++  my_vprintf_scanf2 ("%d", ap, "%d", ip);
++  my_vprintf_scanf2 ("%d", ap, "%ld", lp);
++  my_vprintf_scanf2 ("%", ap, "%d", ip); /* { dg-warning "format" "printf" } */
++  my_vprintf_scanf2 ("%d", ap, "%ld", ip); /* { dg-warning "format" "scanf" } */
++  my_vprintf_scanf3 ("%d", ap, "%d", ip);
++  my_vprintf_scanf3 ("%d", ap, "%ld", lp);
++  my_vprintf_scanf3 ("%", ap, "%d", ip); /* { dg-warning "format" "printf" } */
++  my_vprintf_scanf3 ("%d", ap, "%ld", ip); /* { dg-warning "format" "scanf" } */
++  my_vprintf_scanf4 ("%d", ap, "%d", ip);
++  my_vprintf_scanf4 ("%d", ap, "%ld", lp);
++  my_vprintf_scanf4 ("%", ap, "%d", ip); /* { dg-warning "format" "printf" } */
++  my_vprintf_scanf4 ("%d", ap, "%ld", ip); /* { dg-warning "format" "scanf" } */
++}
+diff -r ddadaee88373 gcc/testsuite/gcc.dg/format/ms_multattr-2.c
+--- /dev/null	Thu Jan 01 00:00:00 1970 +0000
++++ b/gcc/testsuite/gcc.dg/format/ms_multattr-2.c	Mon Jun 02 08:07:23 2008 -0600
+@@ -0,0 +1,40 @@
++/* Test for multiple format attributes.  Test for printf and scanf attributes
++   together, in different places on the declarations.  */
++/* Origin: Joseph Myers <jsm28@cam.ac.uk> */
++/* { dg-do compile { target { *-*-mingw* } } } */
++/* { dg-options "-std=gnu99 -Wformat" } */
++
++#define USE_SYSTEM_FORMATS
++#include "format.h"
++
++/* If we specify multiple attributes for a single function, they should
++   all apply, wherever they are placed on the declarations.  */
++
++extern __attribute__((__format__(__ms_printf__, 1, 0))) void
++     my_vprintf_scanf (const char *, va_list, const char *, ...)
++     __attribute__((__format__(__ms_scanf__, 3, 4)));
++
++extern void (__attribute__((__format__(__ms_printf__, 1, 0))) my_vprintf_scanf2)
++     (const char *, va_list, const char *, ...)
++     __attribute__((__format__(__ms_scanf__, 3, 4)));
++
++extern __attribute__((__format__(__ms_scanf__, 3, 4))) void
++     (__attribute__((__format__(__ms_printf__, 1, 0))) my_vprintf_scanf3)
++     (const char *, va_list, const char *, ...);
++
++void
++foo (va_list ap, int *ip, long *lp)
++{
++  my_vprintf_scanf ("%d", ap, "%d", ip);
++  my_vprintf_scanf ("%d", ap, "%ld", lp);
++  my_vprintf_scanf ("%", ap, "%d", ip); /* { dg-warning "format" "printf" } */
++  my_vprintf_scanf ("%d", ap, "%ld", ip); /* { dg-warning "format" "scanf" } */
++  my_vprintf_scanf2 ("%d", ap, "%d", ip);
++  my_vprintf_scanf2 ("%d", ap, "%ld", lp);
++  my_vprintf_scanf2 ("%", ap, "%d", ip); /* { dg-warning "format" "printf" } */
++  my_vprintf_scanf2 ("%d", ap, "%ld", ip); /* { dg-warning "format" "scanf" } */
++  my_vprintf_scanf3 ("%d", ap, "%d", ip);
++  my_vprintf_scanf3 ("%d", ap, "%ld", lp);
++  my_vprintf_scanf3 ("%", ap, "%d", ip); /* { dg-warning "format" "printf" } */
++  my_vprintf_scanf3 ("%d", ap, "%ld", ip); /* { dg-warning "format" "scanf" } */
++}
+diff -r ddadaee88373 gcc/testsuite/gcc.dg/format/ms_multattr-3.c
+--- /dev/null	Thu Jan 01 00:00:00 1970 +0000
++++ b/gcc/testsuite/gcc.dg/format/ms_multattr-3.c	Mon Jun 02 08:07:23 2008 -0600
+@@ -0,0 +1,29 @@
++/* Test for multiple format_arg attributes.  Test for both branches
++   getting checked.  */
++/* Origin: Joseph Myers <jsm28@cam.ac.uk> */
++/* { dg-do compile { target { *-*-mingw* } } } */
++/* { dg-options "-std=gnu99 -Wformat" } */
++
++#define USE_SYSTEM_FORMATS
++#include "format.h"
++
++extern char *ngettext (const char *, const char *, unsigned long int)
++     __attribute__((__format_arg__(1))) __attribute__((__format_arg__(2)));
++
++void
++foo (long l, int nfoo)
++{
++  printf (ngettext ("%d foo", "%d foos", nfoo), nfoo);
++  printf (ngettext ("%d foo", "%d foos", l), l); /* { dg-warning "int" "wrong type in conditional expr" } */
++  printf (ngettext ("%d foo", "%ld foos", l), l); /* { dg-warning "int" "wrong type in conditional expr" } */
++  printf (ngettext ("%ld foo", "%d foos", l), l); /* { dg-warning "int" "wrong type in conditional expr" } */
++  /* Should allow one case to have extra arguments.  */
++  printf (ngettext ("1 foo", "%d foos", nfoo), nfoo);
++  printf (ngettext ("1 foo", "many foos", nfoo), nfoo); /* { dg-warning "too many" "too many args in all branches" } */
++  printf (ngettext ("", "%d foos", nfoo), nfoo);
++  printf (ngettext ("1 foo", (nfoo > 0) ? "%d foos" : "no foos", nfoo), nfoo);
++  printf (ngettext ("%d foo", (nfoo > 0) ? "%d foos" : "no foos", nfoo), nfoo);
++  printf (ngettext ("%ld foo", (nfoo > 0) ? "%d foos" : "no foos", nfoo), nfoo); /* { dg-warning "long int" "wrong type" } */
++  printf (ngettext ("%d foo", (nfoo > 0) ? "%ld foos" : "no foos", nfoo), nfoo); /* { dg-warning "long int" "wrong type" } */
++  printf (ngettext ("%d foo", (nfoo > 0) ? "%d foos" : "%ld foos", nfoo), nfoo); /* { dg-warning "long int" "wrong type" } */
++}
+diff -r ddadaee88373 gcc/testsuite/gcc.dg/format/ms_no-exargs-1.c
+--- /dev/null	Thu Jan 01 00:00:00 1970 +0000
++++ b/gcc/testsuite/gcc.dg/format/ms_no-exargs-1.c	Mon Jun 02 08:07:23 2008 -0600
+@@ -0,0 +1,15 @@
++/* Test for warnings for extra format arguments being disabled by
++   -Wno-format-extra-args.  */
++/* Origin: Joseph Myers <jsm28@cam.ac.uk> */
++/* { dg-do compile { target { *-*-mingw* } } } */
++/* { dg-options "-std=gnu99 -Wformat -Wno-format-extra-args" } */
++
++#define USE_SYSTEM_FORMATS
++#include "format.h"
++
++void
++foo (int i)
++{
++  printf ("foo", i);
++  printf ("%1$d", i, i);
++}
+diff -r ddadaee88373 gcc/testsuite/gcc.dg/format/ms_no-exargs-2.c
+--- /dev/null	Thu Jan 01 00:00:00 1970 +0000
++++ b/gcc/testsuite/gcc.dg/format/ms_no-exargs-2.c	Mon Jun 02 08:07:23 2008 -0600
+@@ -0,0 +1,28 @@
++/* Test for warnings for extra format arguments being disabled by
++   -Wno-format-extra-args.  Test which warnings still apply with $
++   operand numbers.  */
++/* Origin: Joseph Myers <jsm28@cam.ac.uk> */
++/* { dg-do compile { target { *-*-mingw* } } } */
++/* { dg-options "-std=gnu99 -Wformat -Wno-format-extra-args" } */
++
++#define USE_SYSTEM_FORMATS
++#include "format.h"
++
++void
++foo (int i, int *ip, va_list va)
++{
++  printf ("%3$d%1$d", i, i, i); /* { dg-warning "before used" "unused $ operand" } */
++  printf ("%2$d%1$d", i, i, i);
++  vprintf ("%3$d%1$d", va); /* { dg-warning "before used" "unused $ operand" } */
++  /* With scanf formats, gaps in the used arguments are allowed only if the
++     arguments are all pointers.  In such a case, should only give the lesser
++     warning about unused arguments rather than the more serious one about
++     argument gaps.  */
++  scanf ("%3$d%1$d", ip, ip, ip);
++  /* If there are non-pointer arguments unused at the end, this is also OK.  */
++  scanf ("%3$d%1$d", ip, ip, ip, i);
++  scanf ("%3$d%1$d", ip, i, ip); /* { dg-warning "before used" "unused $ scanf non-pointer operand" } */
++  /* Can't check the arguments in the vscanf case, so should suppose the
++     lesser problem.  */
++  vscanf ("%3$d%1$d", va);
++}
+diff -r ddadaee88373 gcc/testsuite/gcc.dg/format/ms_no-y2k-1.c
+--- /dev/null	Thu Jan 01 00:00:00 1970 +0000
++++ b/gcc/testsuite/gcc.dg/format/ms_no-y2k-1.c	Mon Jun 02 08:07:23 2008 -0600
+@@ -0,0 +1,13 @@
++/* Test for warnings for Y2K problems not being on by default.  */
++/* Origin: Joseph Myers <jsm28@cam.ac.uk> */
++/* { dg-do compile { target { *-*-mingw* } } } */
++/* { dg-options "-std=gnu99 -Wformat" } */
++
++#define USE_SYSTEM_FORMATS
++#include "format.h"
++
++void
++foo (char *s, size_t m, const struct tm *tp)
++{
++  strftime (s, m, "%y%c%x", tp);
++}
+diff -r ddadaee88373 gcc/testsuite/gcc.dg/format/ms_nonlit-1.c
+--- /dev/null	Thu Jan 01 00:00:00 1970 +0000
++++ b/gcc/testsuite/gcc.dg/format/ms_nonlit-1.c	Mon Jun 02 08:07:23 2008 -0600
+@@ -0,0 +1,14 @@
++/* Test for warnings for non-string-literal formats.  */
++/* Origin: Joseph Myers <jsm28@cam.ac.uk> */
++/* { dg-do compile { target { *-*-mingw* } } } */
++/* { dg-options "-std=gnu99 -Wformat -Wformat-nonliteral" } */
++
++#define USE_SYSTEM_FORMATS
++#include "format.h"
++
++void
++foo (char *s, size_t i)
++{
++  printf ((const char *)i, i); /* { dg-warning "argument types" "non-literal" } */
++  printf (s, i); /* { dg-warning "argument types" "non-literal" } */
++}
+diff -r ddadaee88373 gcc/testsuite/gcc.dg/format/ms_nonlit-2.c
+--- /dev/null	Thu Jan 01 00:00:00 1970 +0000
++++ b/gcc/testsuite/gcc.dg/format/ms_nonlit-2.c	Mon Jun 02 08:07:23 2008 -0600
+@@ -0,0 +1,14 @@
++/* Test for warnings for non-string-literal formats.  Test with -Wformat=2.  */
++/* Origin: Joseph Myers <jsm28@cam.ac.uk> */
++/* { dg-do compile { target { *-*-mingw* } } } */
++/* { dg-options "-std=gnu99 -Wformat=2" } */
++
++#define USE_SYSTEM_FORMATS
++#include "format.h"
++
++void
++foo (char *s, size_t i)
++{
++  printf ((const char *)i, i); /* { dg-warning "argument types" "non-literal" } */
++  printf (s, i); /* { dg-warning "argument types" "non-literal" } */
++}
+diff -r ddadaee88373 gcc/testsuite/gcc.dg/format/ms_nonlit-3.c
+--- /dev/null	Thu Jan 01 00:00:00 1970 +0000
++++ b/gcc/testsuite/gcc.dg/format/ms_nonlit-3.c	Mon Jun 02 08:07:23 2008 -0600
+@@ -0,0 +1,13 @@
++/* Test for warnings for non-string-literal formats.  Test for strftime formats.  */
++/* Origin: Joseph Myers <jsm28@cam.ac.uk> */
++/* { dg-do compile { target { *-*-mingw* } } } */
++/* { dg-options "-std=gnu99 -Wformat -Wformat-nonliteral" } */
++
++#define USE_SYSTEM_FORMATS
++#include "format.h"
++
++void
++foo (char *s, size_t m, const struct tm *tp, char *fmt)
++{
++  strftime (s, m, fmt, tp); /* { dg-warning "format string" "non-literal" } */
++}
+diff -r ddadaee88373 gcc/testsuite/gcc.dg/format/ms_nul-1.c
+--- /dev/null	Thu Jan 01 00:00:00 1970 +0000
++++ b/gcc/testsuite/gcc.dg/format/ms_nul-1.c	Mon Jun 02 08:07:23 2008 -0600
+@@ -0,0 +1,15 @@
++/* Test diagnostics for suppressing contains nul
++   -Wformat.  -Wformat.  */
++/* Origin: Bruce Korb <bkorb@gnu.org> */
++/* { dg-do compile { target { *-*-mingw* } } } */
++/* { dg-options "-Wformat -Wno-format-contains-nul" } */
++
++#define USE_SYSTEM_FORMATS
++#include "format.h"
++
++void
++foo (void)
++{
++  static char const fmt[] = "x%s\0%s\n\0abc";
++  printf (fmt+4, fmt+8); /* { dg-bogus "embedded.*in format" "bogus embed warning" } */
++}
+diff -r ddadaee88373 gcc/testsuite/gcc.dg/format/ms_nul-2.c
+--- /dev/null	Thu Jan 01 00:00:00 1970 +0000
++++ b/gcc/testsuite/gcc.dg/format/ms_nul-2.c	Mon Jun 02 08:07:23 2008 -0600
+@@ -0,0 +1,17 @@
++/* Test diagnostics for options used on their own without
++   -Wformat.  -Wformat-.  */
++/* Origin: Bruce Korb <bkorb@gnu.org> */
++/* { dg-do compile { target { *-*-mingw* } } } */
++/* { dg-options "-Wformat" } */
++
++/* { dg-warning "embedded .* in format" "ignored" { target *-*-* } 0 } */
++
++#define USE_SYSTEM_FORMATS
++#include "format.h"
++
++void
++fumble (void)
++{
++  static char const fmt[] = "x%s\0%s\n\0abc";
++  printf (fmt+4, fmt+8);
++}
+diff -r ddadaee88373 gcc/testsuite/gcc.dg/format/ms_null-1.c
+--- /dev/null	Thu Jan 01 00:00:00 1970 +0000
++++ b/gcc/testsuite/gcc.dg/format/ms_null-1.c	Mon Jun 02 08:07:23 2008 -0600
+@@ -0,0 +1,28 @@
++/* Test for some aspects of null format string handling.  */
++/* Origin: Jason Thorpe <thorpej@wasabisystems.com> */
++/* { dg-do compile { target { *-*-mingw* } } } */
++/* { dg-options "-std=gnu99 -Wformat" } */
++
++#define USE_SYSTEM_FORMATS
++#include "format.h"
++
++extern void my_printf (const char *, ...) __attribute__((format(ms_printf,1,2)));
++extern const char *my_format (const char *, const char *)
++  __attribute__((format_arg(2)));
++
++void
++foo (int i1)
++{
++  /* Warning about a null format string has been decoupled from the actual
++     format check.  However, we still expect to be warned about any excess
++     arguments after a null format string.  */
++  my_printf (NULL);
++  my_printf (NULL, i1); /* { dg-warning "too many" "null format with arguments" } */
++
++  my_printf (my_format ("", NULL));
++  my_printf (my_format ("", NULL), i1); /* { dg-warning "too many" "null format_arg with arguments" } */
++
++  /* While my_printf allows a null argument, dgettext does not, so we expect
++     a null argument warning here.  */
++  my_printf (dgettext ("", NULL)); /* { dg-warning "null" "null format with dgettext" } */
++}
+diff -r ddadaee88373 gcc/testsuite/gcc.dg/format/ms_plus-1.c
+--- /dev/null	Thu Jan 01 00:00:00 1970 +0000
++++ b/gcc/testsuite/gcc.dg/format/ms_plus-1.c	Mon Jun 02 08:07:23 2008 -0600
+@@ -0,0 +1,21 @@
++/* Test for printf formats using string literal plus constant.
++ */
++/* Origin: Jakub Jelinek <jakub@redhat.com> */
++/* { dg-do compile { target { *-*-mingw* } } } */
++/* { dg-options "-std=iso9899:1990 -pedantic -Wformat=2" } */
++
++#define USE_SYSTEM_FORMATS
++#include "format.h"
++
++void
++foo (int i)
++{
++  printf ("%%d\n" + 1, i);
++  printf (5 + "%.-*d%3d\n", i);
++  printf ("%d%d" + 2, i, i);	/* { dg-warning "arguments" "wrong number of args" } */
++  printf (3 + "%d\n");		/* { dg-warning "zero-length" "zero-length string" } */
++  printf ("%d\n" + i, i);	/* { dg-warning "not a string" "non-constant addend" } */
++  printf ("%d\n" + 10);		/* { dg-warning "not a string" "too large addend" } */
++  printf ("%d\n" - 1, i);	/* { dg-warning "not a string" "minus constant" } */
++  printf ("%d\n" + -1, i);	/* { dg-warning "not a string" "negative addend" } */
++}
+diff -r ddadaee88373 gcc/testsuite/gcc.dg/format/ms_sec-1.c
+--- /dev/null	Thu Jan 01 00:00:00 1970 +0000
++++ b/gcc/testsuite/gcc.dg/format/ms_sec-1.c	Mon Jun 02 08:07:23 2008 -0600
+@@ -0,0 +1,13 @@
++/* Test for security warning when non-literal format has no arguments.  */
++/* Origin: Joseph Myers <jsm28@cam.ac.uk> */
++/* { dg-do compile { target { *-*-mingw* } } } */
++/* { dg-options "-std=gnu99 -Wformat -Wformat-security" } */
++
++#define USE_SYSTEM_FORMATS
++#include "format.h"
++
++void
++foo (char *s)
++{
++  printf (s); /* { dg-warning "no format arguments" "security warning" } */
++}
+diff -r ddadaee88373 gcc/testsuite/gcc.dg/format/ms_unnamed-1.c
+--- /dev/null	Thu Jan 01 00:00:00 1970 +0000
++++ b/gcc/testsuite/gcc.dg/format/ms_unnamed-1.c	Mon Jun 02 08:07:23 2008 -0600
+@@ -0,0 +1,24 @@
++/* Test for warnings with possibly unnamed integer types.  Bug 24329.  */
++/* Origin: Joseph Myers <joseph@codesourcery.com> */
++/* { dg-do compile { target { *-*-mingw* } } } */
++/* { dg-options "-Wformat" } */
++/* { dg-options "-Wformat -msse" { target { { i?86-*-* x86_64-*-* } && ilp32 } } } */
++
++#define USE_SYSTEM_FORMATS
++#include "format.h"
++
++/* Definition of TItype follows same logic as in gcc.dg/titype-1.c,
++   but must be a #define to avoid giving the type a name.  */
++#if defined(__LP64__) && !defined(__hppa__)
++#define TItype int __attribute__ ((mode (TI)))
++#else
++#define TItype long
++#endif
++
++void
++f (TItype x)
++{
++  printf("%d", x); /* { dg-warning "expects type" } */
++  printf("%d", 141592653589793238462643383279502884197169399375105820974944); /* { dg-warning "expects type" } */
++  /* { dg-warning "unsigned only|too large" "constant" { target *-*-* } 22 } */
++}
+diff -r ddadaee88373 gcc/testsuite/gcc.dg/format/ms_va-1.c
+--- /dev/null	Thu Jan 01 00:00:00 1970 +0000
++++ b/gcc/testsuite/gcc.dg/format/ms_va-1.c	Mon Jun 02 08:07:23 2008 -0600
+@@ -0,0 +1,14 @@
++/* Test for strange warning in format checking.  */
++/* Origin: Joseph Myers <jsm28@cam.ac.uk> */
++/* { dg-do compile { target { *-*-mingw* } } } */
++/* { dg-options "-Wformat" } */
++
++#define USE_SYSTEM_FORMATS
++#include "format.h"
++
++void
++foo (void *p)
++{
++  printf ("%d", p); /* { dg-bogus "va_list" "wrong type in format warning" } */
++  /* { dg-warning "format" "format error" { target *-*-* } 12 } */
++}
+diff -r ddadaee88373 gcc/testsuite/gcc.dg/format/ms_zero-length-1.c
+--- /dev/null	Thu Jan 01 00:00:00 1970 +0000
++++ b/gcc/testsuite/gcc.dg/format/ms_zero-length-1.c	Mon Jun 02 08:07:23 2008 -0600
+@@ -0,0 +1,16 @@
++/* Test the -Wno-format-zero-length option, which suppresses warnings
++   about zero-length formats.  */
++/* Origin: Jason Thorpe <thorpej@wasabisystems.com> */
++/* { dg-do compile { target { *-*-mingw* } } } */
++/* { dg-options "-std=iso9899:1990 -pedantic -Wformat -Wno-format-zero-length" } */
++
++#define USE_SYSTEM_FORMATS
++#include "format.h"
++
++void
++foo (void)
++{
++  /* See ISO/IEC 9899:1990 (E) subclause 7.9.6.1 (pages 131-134).  */
++  /* Zero-length format strings are allowed.  */
++  printf ("");
++}
+diff -r ddadaee88373 gcc/testsuite/gcc.dg/format/multattr-1.c
+--- a/gcc/testsuite/gcc.dg/format/multattr-1.c	Thu May 29 20:27:38 2008 -0600
++++ b/gcc/testsuite/gcc.dg/format/multattr-1.c	Mon Jun 02 08:07:23 2008 -0600
+@@ -4,6 +4,7 @@
+ /* { dg-do compile } */
+ /* { dg-options "-std=gnu99 -Wformat" } */
+ 
++#define DONT_GNU_PROTOTYPE
+ #include "format.h"
+ 
+ /* If we specify multiple attributes for a single function, they should
+@@ -11,22 +12,22 @@
+    or on different declarations.  */
+ 
+ extern void my_vprintf_scanf (const char *, va_list, const char *, ...)
+-     __attribute__((__format__(__printf__, 1, 0)))
+-     __attribute__((__format__(__scanf__, 3, 4)));
++     __attribute__((__format__(gnu_attr___printf__, 1, 0)))
++     __attribute__((__format__(gnu_attr___scanf__, 3, 4)));
+ 
+ extern void my_vprintf_scanf2 (const char *, va_list, const char *, ...)
+-     __attribute__((__format__(__scanf__, 3, 4)))
+-     __attribute__((__format__(__printf__, 1, 0)));
++     __attribute__((__format__(gnu_attr___scanf__, 3, 4)))
++     __attribute__((__format__(gnu_attr___printf__, 1, 0)));
+ 
+ extern void my_vprintf_scanf3 (const char *, va_list, const char *, ...)
+-     __attribute__((__format__(__printf__, 1, 0)));
++     __attribute__((__format__(gnu_attr___printf__, 1, 0)));
+ extern void my_vprintf_scanf3 (const char *, va_list, const char *, ...)
+-     __attribute__((__format__(__scanf__, 3, 4)));
++     __attribute__((__format__(gnu_attr___scanf__, 3, 4)));
+ 
+ extern void my_vprintf_scanf4 (const char *, va_list, const char *, ...)
+-     __attribute__((__format__(__scanf__, 3, 4)));
++     __attribute__((__format__(gnu_attr___scanf__, 3, 4)));
+ extern void my_vprintf_scanf4 (const char *, va_list, const char *, ...)
+-     __attribute__((__format__(__printf__, 1, 0)));
++     __attribute__((__format__(gnu_attr___printf__, 1, 0)));
+ 
+ void
+ foo (va_list ap, int *ip, long *lp)
+diff -r ddadaee88373 gcc/testsuite/gcc.dg/format/multattr-2.c
+--- a/gcc/testsuite/gcc.dg/format/multattr-2.c	Thu May 29 20:27:38 2008 -0600
++++ b/gcc/testsuite/gcc.dg/format/multattr-2.c	Mon Jun 02 08:07:23 2008 -0600
+@@ -4,21 +4,22 @@
+ /* { dg-do compile } */
+ /* { dg-options "-std=gnu99 -Wformat" } */
+ 
++#define DONT_GNU_PROTOTYPE
+ #include "format.h"
+ 
+ /* If we specify multiple attributes for a single function, they should
+    all apply, wherever they are placed on the declarations.  */
+ 
+-extern __attribute__((__format__(__printf__, 1, 0))) void
++extern __attribute__((__format__(gnu_attr___printf__, 1, 0))) void
+      my_vprintf_scanf (const char *, va_list, const char *, ...)
+-     __attribute__((__format__(__scanf__, 3, 4)));
++     __attribute__((__format__(gnu_attr___scanf__, 3, 4)));
+ 
+-extern void (__attribute__((__format__(__printf__, 1, 0))) my_vprintf_scanf2)
++extern void (__attribute__((__format__(gnu_attr___printf__, 1, 0))) my_vprintf_scanf2)
+      (const char *, va_list, const char *, ...)
+-     __attribute__((__format__(__scanf__, 3, 4)));
++     __attribute__((__format__(gnu_attr___scanf__, 3, 4)));
+ 
+-extern __attribute__((__format__(__scanf__, 3, 4))) void
+-     (__attribute__((__format__(__printf__, 1, 0))) my_vprintf_scanf3)
++extern __attribute__((__format__(gnu_attr___scanf__, 3, 4))) void
++     (__attribute__((__format__(gnu_attr___printf__, 1, 0))) my_vprintf_scanf3)
+      (const char *, va_list, const char *, ...);
+ 
+ void
+diff -r ddadaee88373 gcc/testsuite/gcc.dg/format/null-1.c
+--- a/gcc/testsuite/gcc.dg/format/null-1.c	Thu May 29 20:27:38 2008 -0600
++++ b/gcc/testsuite/gcc.dg/format/null-1.c	Mon Jun 02 08:07:23 2008 -0600
+@@ -3,9 +3,10 @@
+ /* { dg-do compile } */
+ /* { dg-options "-std=gnu99 -Wformat" } */
+ 
++#define DONT_GNU_PROTOTYPE
+ #include "format.h"
+ 
+-extern void my_printf (const char *, ...) __attribute__((format(printf,1,2)));
++extern void my_printf (const char *, ...) __attribute__((format(gnu_attr_printf,1,2)));
+ extern const char *my_format (const char *, const char *)
+   __attribute__((format_arg(2)));
+ 
+diff -r ddadaee88373 gcc/testsuite/gcc.dg/format/sys_format.c
+--- /dev/null	Thu Jan 01 00:00:00 1970 +0000
++++ b/gcc/testsuite/gcc.dg/format/sys_format.c	Mon Jun 02 08:07:23 2008 -0600
+@@ -0,0 +1,14 @@
++/* Test system default printf formatter specifiers.  */
++/* Origin: Kai Tietz <KaiTietz.@onevision.com> */
++/* { dg-do compile { target { *-*-mingw* } } } */
++/* { dg-options "-std=gnu89" } */
++
++#define USE_SYSTEM_FORMATS
++#include "format.h"
++
++__attribute__((format(printf, 1, 2))) void foo (const char *, ...);
++
++void bar (long long v1, long v2, int v3)
++{
++  foo ("%I64d %I32d %ld %d\n", v1, v2, v2, v3);
++}
