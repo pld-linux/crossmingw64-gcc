@@ -9,18 +9,19 @@ Summary(pl.UTF-8):	Skrośne narzędzia programistyczne GNU dla Mingw64 - gcc
 Summary(pt_BR.UTF-8):	Utilitários para desenvolvimento de binários da GNU - Mingw64 gcc
 Summary(tr.UTF-8):	GNU geliştirme araçları - Mingw64 gcc
 Name:		crossmingw64-gcc
-Version:	4.3.1
+Version:	4.3.2
 Release:	1
 Epoch:		1
 License:	GPL v3+
 Group:		Development/Languages
 Source0:	ftp://gcc.gnu.org/pub/gcc/releases/gcc-%{version}/gcc-%{version}.tar.bz2
-# Source0-md5:	4afa0290cc3a41ac8822666f1110de98
-Source1:	http://dl.sourceforge.net/mingw-w64/mingw-w64-snapshot-20080424.tar.bz2
-# Source1-md5:	e2eea49233efd0be3a40fc774abeb1a2
+# Source0-md5:	5dfac5da961ecd5f227c3175859a486d
+Source1:	http://dl.sourceforge.net/mingw-w64/mingw-w64-snapshot-20080917.tar.bz2
+# Source1-md5:	07ec77f1d570df2fbb3a48e9de24fb9e
 Patch0:		%{name}-no_include64.patch
 Patch1:		%{name}-no_red_zone.patch
 Patch2:		%{name}-pr25672.patch
+Patch3:		%{name}-msvcrt-fmt.patch
 BuildRequires:	autoconf
 BuildRequires:	automake
 BuildRequires:	bison
@@ -65,6 +66,7 @@ This package contains cross targeted g++ and (static) libstdc++.
 %patch0 -p1
 %patch1 -p1
 %patch2 -p1
+%patch3 -p1
 mkdir -p winsup/mingw
 cp -ar trunk/mingw-w64-headers/include winsup/mingw
 
