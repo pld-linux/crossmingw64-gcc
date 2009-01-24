@@ -1,6 +1,6 @@
 #
 # Conditional build:
-%bcond_with	bootstrap	# bootstrap build (only C compiler)
+%bcond_with	bootstrap	# bootstrap build (only C compiler with static runtime)
 #
 Summary:	Cross Mingw64 GNU binary utility development utilities - gcc
 Summary(es.UTF-8):	Utilitarios para desarrollo de binarios de la GNU - Mingw64 gcc
@@ -9,23 +9,25 @@ Summary(pl.UTF-8):	Skrośne narzędzia programistyczne GNU dla Mingw64 - gcc
 Summary(pt_BR.UTF-8):	Utilitários para desenvolvimento de binários da GNU - Mingw64 gcc
 Summary(tr.UTF-8):	GNU geliştirme araçları - Mingw64 gcc
 Name:		crossmingw64-gcc
-Version:	4.3.2
-Release:	1
+%define		_major_ver	4.4
+%define		_minor_ver	0
+Version:	%{_major_ver}.%{_minor_ver}
+%define		_snap	20090123
+Release:	0.%{_snap}.1
 Epoch:		1
 License:	GPL v3+
 Group:		Development/Languages
-Source0:	ftp://gcc.gnu.org/pub/gcc/releases/gcc-%{version}/gcc-%{version}.tar.bz2
-# Source0-md5:	5dfac5da961ecd5f227c3175859a486d
-Source1:	http://dl.sourceforge.net/mingw-w64/mingw-w64-snapshot-20080917.tar.bz2
-# Source1-md5:	07ec77f1d570df2fbb3a48e9de24fb9e
+#Source0:	ftp://gcc.gnu.org/pub/gcc/releases/gcc-%{version}/gcc-%{version}.tar.bz2
+Source0:	ftp://gcc.gnu.org/pub/gcc/snapshots/LATEST-%{_major_ver}/gcc-%{_major_ver}-%{_snap}.tar.bz2
+Source1:	http://dl.sourceforge.net/mingw-w64/mingw-w64-snapshot-20081115.tar.bz2
+# Source1-md5:	b472282419e6aea64e14763e30d5bb63
+Patch100:	gcc-branch.diff.bz2
 Patch0:		%{name}-no_include64.patch
-Patch1:		%{name}-no_red_zone.patch
-Patch2:		%{name}-pr25672.patch
-Patch3:		%{name}-msvcrt-fmt.patch
 BuildRequires:	autoconf
 BuildRequires:	automake
 BuildRequires:	bison
 BuildRequires:	crossmingw64-binutils
+%{!?with_bootstrap:BuildRequires:	crossmingw64-gcc}
 BuildRequires:	flex
 BuildRequires:	mpfr-devel
 BuildRequires:	texinfo >= 4.2
@@ -62,11 +64,10 @@ and libstdc++, all cross targeted to x86_64-mingw32.
 This package contains cross targeted g++ and (static) libstdc++.
 
 %prep
-%setup -q -n gcc-%{version} -a 1
+#setup -q -n gcc-%{version} -a 1
+%setup -q -n gcc-%{_major_ver}-%{_snap} -a 1
+#patch100 -p0
 %patch0 -p1
-%patch1 -p1
-%patch2 -p1
-%patch3 -p1
 mkdir -p winsup/mingw
 cp -ar trunk/mingw-w64-headers/include winsup/mingw
 
@@ -86,14 +87,17 @@ TEXCONFIG=false \
 	--libdir=%{_libdir} \
 	--libexecdir=%{_libexecdir} \
 	--includedir=%{arch}/include \
+	--with-gnu-as \
+	--with-gnu-ld \
 	--with-sysroot=%{arch} \
-	--with-build-sysroot=$build_sysroot \
-	--disable-shared \
+	%{?with_bootstrap:--with-build-sysroot=$build_sysroot} \
+	--%{?with_bootstrap:dis}%{!?with_bootstrap:en}able-shared \
 	--enable-threads=win32 \
 	--disable-sjlj-exceptions \
 	--enable-languages="c%{!?with_bootstrap:,c++}" \
 	--enable-c99 \
 	--enable-long-long \
+	--enable-decimal-float=yes \
 	--enable-cmath \
 	--disable-nls \
 	--with-gnu-as \
@@ -121,14 +125,14 @@ p=`pwd`/BUILDDIR/gcc
 EOF
 chmod 755 cross-gcc
 
-export CC=`pwd`/cross-gcc
+export CC=%{?with_bootstrap:`pwd`/cross-gcc}%{!?with_bootstrap:%{_bindir}/%{target}-gcc}
 
 cd trunk/mingw-w64-crt
 
 ./configure \
 	--host=%{target} \
 	--prefix=%{_prefix} \
-	--with-sysroot=$build_sysroot \
+	--with-sysroot=%{?with_bootstrap:$build_sysroot}%{!?with_bootstrap:%{arch}}
 
 %{__make}
 
@@ -182,10 +186,13 @@ rm -rf $RPM_BUILD_ROOT
 %dir %{gcclib}
 %dir %{gcclib}/include
 %{gcclib}/include/ammintrin.h
+%{gcclib}/include/avxintrin.h
 %{gcclib}/include/bmmintrin.h
 %{gcclib}/include/cpuid.h
+%{gcclib}/include/cross-stdarg.h
 %{gcclib}/include/emmintrin.h
 %{gcclib}/include/float.h
+%{gcclib}/include/immintrin.h
 %{gcclib}/include/iso646.h
 %{gcclib}/include/limits.h
 %{gcclib}/include/mm3dnow.h
@@ -204,10 +211,17 @@ rm -rf $RPM_BUILD_ROOT
 %{gcclib}/include/tmmintrin.h
 %{gcclib}/include/unwind.h
 %{gcclib}/include/varargs.h
+%{gcclib}/include/wmmintrin.h
+%{gcclib}/include/x86intrin.h
 %{gcclib}/include/xmmintrin.h
 %attr(755,root,root) %{gcclib}/cc1
 %attr(755,root,root) %{gcclib}/collect2
+%{gcclib}/*.o
 %{gcclib}/libgcc.a
+%if %{without bootstrap}
+%{_bindir}/libgcc_s_1.dll
+%{gcclib}/libgcc_eh.a
+%endif
 %{gcclib}/libgcov.a
 %{gcclib}/specs*
 %{_mandir}/man1/%{target}-cpp.1*
