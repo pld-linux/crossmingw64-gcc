@@ -93,7 +93,7 @@ TEXCONFIG=false \
 	%{?with_bootstrap:--with-build-sysroot=$build_sysroot} \
 	--%{?with_bootstrap:dis}%{!?with_bootstrap:en}able-shared \
 	--enable-threads=win32 \
-	--disable-sjlj-exceptions \
+	--enable-sjlj-exceptions \
 	--enable-languages="c%{!?with_bootstrap:,c++}" \
 	--enable-c99 \
 	--enable-long-long \
