@@ -12,7 +12,7 @@ Name:		crossmingw64-gcc
 %define		_major_ver	4.4
 %define		_minor_ver	0
 Version:	%{_major_ver}.%{_minor_ver}
-%define		_snap	20090123
+%define		_snap	20090206
 Release:	0.%{_snap}.1
 Epoch:		1
 License:	GPL v3+
@@ -100,11 +100,13 @@ TEXCONFIG=false \
 	--enable-decimal-float=yes \
 	--enable-cmath \
 	--disable-nls \
+	--disable-win32-registry \
 	--with-gnu-as \
 	--with-gnu-ld \
 	--with-mangler-in-ld \
 	--with-gxx-include-dir=%{arch}/include/c++/%{version} \
 	--disable-libstdcxx-pch \
+	--disable-symvers \
 	--enable-__cxa_atexit \
 	--disable-libmudflap \
 	--disable-libssp \
@@ -219,7 +221,7 @@ rm -rf $RPM_BUILD_ROOT
 %{gcclib}/*.o
 %{gcclib}/libgcc.a
 %if %{without bootstrap}
-%{_bindir}/libgcc_s_1.dll
+%{_bindir}/libgcc_s_sjlj-1.dll
 %{gcclib}/libgcc_eh.a
 %endif
 %{gcclib}/libgcov.a
