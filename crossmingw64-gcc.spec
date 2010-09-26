@@ -10,7 +10,7 @@ Summary(pt_BR.UTF-8):	Utilitários para desenvolvimento de binários da GNU - Mi
 Summary(tr.UTF-8):	GNU geliştirme araçları - Mingw64 gcc
 Name:		crossmingw64-gcc
 Version:	4.5.1
-Release:	0.2
+Release:	0.3
 Epoch:		1
 License:	GPL v3+
 Group:		Development/Languages
@@ -43,6 +43,9 @@ BuildRoot:	%{tmpdir}/%{name}-%{version}-root-%(id -u -n)
 %define		gcclib		%{gccarch}/%{version}
 
 %define		_noautostrip	.*/lib.*\\.a
+
+# workaround bootstrap bug: http://gcc.gnu.org/bugzilla/PR25672
+%define		filterout	-march=i486 -march=i686 -mtune=pentium4
 
 %description
 crossmingw64 is a complete cross-compiling development system for
