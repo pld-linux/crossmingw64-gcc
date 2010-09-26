@@ -10,7 +10,7 @@ Summary(pt_BR.UTF-8):	Utilitários para desenvolvimento de binários da GNU - Mi
 Summary(tr.UTF-8):	GNU geliştirme araçları - Mingw64 gcc
 Name:		crossmingw64-gcc
 Version:	4.5.1
-Release:	0.3
+Release:	1
 Epoch:		1
 License:	GPL v3+
 Group:		Development/Languages
@@ -153,6 +153,12 @@ cd BUILDDIR
 	DESTDIR=$RPM_BUILD_ROOT
 
 install gcc/specs $RPM_BUILD_ROOT%{gcclib}
+
+if [ ! -f "$RPM_BUILD_ROOT%{_bindir}/libgcc_s_sjlj-1.dll" ]; then
+	echo "libgcc_s_sjlj-1.dll install still broken?"
+	install %{target}/libgcc/shlib/libgcc_s_sjlj-1.dll $RPM_BUILD_ROOT%{_bindir}
+fi
+
 cd ..
 
 gccdir=$RPM_BUILD_ROOT%{gcclib}
@@ -244,6 +250,7 @@ rm -rf $RPM_BUILD_ROOT
 %defattr(644,root,root,755)
 %attr(755,root,root) %{_bindir}/%{target}-[cg]++
 %attr(755,root,root) %{gcclib}/cc1plus
+%{_bindir}/libstdc++-6.dll
 %{arch}/lib/libstdc++.a
 %{arch}/lib/libstdc++.la
 %{arch}/lib/libsupc++.a
