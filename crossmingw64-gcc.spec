@@ -9,32 +9,34 @@ Summary(pl.UTF-8):	Skrośne narzędzia programistyczne GNU dla Mingw64 - gcc
 Summary(pt_BR.UTF-8):	Utilitários para desenvolvimento de binários da GNU - Mingw64 gcc
 Summary(tr.UTF-8):	GNU geliştirme araçları - Mingw64 gcc
 Name:		crossmingw64-gcc
-%define		_major_ver	4.4
-%define		_minor_ver	0
-Version:	%{_major_ver}.%{_minor_ver}
-%define		_snap	20090206
-Release:	0.%{_snap}.1
+Version:	4.5.1
+Release:	0.1
 Epoch:		1
 License:	GPL v3+
 Group:		Development/Languages
-#Source0:	ftp://gcc.gnu.org/pub/gcc/releases/gcc-%{version}/gcc-%{version}.tar.bz2
-Source0:	ftp://gcc.gnu.org/pub/gcc/snapshots/LATEST-%{_major_ver}/gcc-%{_major_ver}-%{_snap}.tar.bz2
-Source1:	http://dl.sourceforge.net/mingw-w64/mingw-w64-snapshot-20081115.tar.bz2
-# Source1-md5:	b472282419e6aea64e14763e30d5bb63
-Patch100:	gcc-branch.diff.bz2
-Patch0:		%{name}-no_include64.patch
+Source0:	ftp://gcc.gnu.org/pub/gcc/releases/gcc-%{version}/gcc-%{version}.tar.bz2
+# svn co https://mingw-w64.svn.sourceforge.net/svnroot/mingw-w64/branches/releases/v1.0/mingw-w64-crt mingw64-crt
+%define		_rev	3654
+Source1:	mingw64-crt.tar.bz2
+# Source1-md5:	fd2acf22ae08c8929e384bd74c0cfa55
+Patch0:		gcc-branch.diff
+Patch1:		gcc-mingw-dirs.patch
 BuildRequires:	autoconf
 BuildRequires:	automake
 BuildRequires:	bison
 BuildRequires:	crossmingw64-binutils
 %{!?with_bootstrap:BuildRequires:	crossmingw64-gcc}
+BuildRequires:	crossmingw64-headers
 BuildRequires:	flex
-BuildRequires:	mpfr-devel
+BuildRequires:	gmp-devel >= 4.1
+BuildRequires:	libmpc-devel
+BuildRequires:	mpfr-devel >= 2.3.0
 BuildRequires:	texinfo >= 4.2
 Requires:	crossmingw64-binutils
+Requires:	crossmingw64-headers
 BuildRoot:	%{tmpdir}/%{name}-%{version}-root-%(id -u -n)
 
-%define		target		x86_64-mingw32
+%define		target		x86_64-pc-mingw32
 %define		arch		%{_prefix}/%{target}
 %define		gccarch		%{_libdir}/gcc/%{target}
 %define		gcclib		%{gccarch}/%{version}
@@ -45,7 +47,7 @@ BuildRoot:	%{tmpdir}/%{name}-%{version}-root-%(id -u -n)
 crossmingw64 is a complete cross-compiling development system for
 building stand-alone Microsoft Windows applications under Linux using
 the Mingw64 build libraries. This includes a binutils, gcc with g++
-and libstdc++, all cross targeted to x86_64-mingw32.
+and libstdc++, all cross targeted to x86_64-pc-mingw32.
 
 This package contains cross targeted gcc.
 
@@ -59,28 +61,35 @@ Requires:	%{name} = %{epoch}:%{version}-%{release}
 crossmingw64 is a complete cross-compiling development system for
 building stand-alone Microsoft Windows applications under Linux using
 the Mingw64 build libraries. This includes a binutils, gcc with g++
-and libstdc++, all cross targeted to x86_64-mingw32.
+and libstdc++, all cross targeted to x86_64-pc-mingw32.
 
-This package contains cross targeted g++ and (static) libstdc++.
+This package contains cross targeted g++ and libstdc++.
 
 %prep
-#setup -q -n gcc-%{version} -a 1
-%setup -q -n gcc-%{_major_ver}-%{_snap} -a 1
-#patch100 -p0
-%patch0 -p1
-mkdir -p winsup/mingw
-cp -ar trunk/mingw-w64-headers/include winsup/mingw
+%setup -q -n gcc-%{version} -a 1
+%patch0 -p0
+%patch1 -p1
+
+# override snapshot version.
+echo %{version} > gcc/BASE-VER
+echo "release" > gcc/DEV-PHASE
+
+if [ "`svnversion -n mingw64-crt`" != "%{_rev}" ]; then
+	exit 1
+fi
 
 %build
-build_sysroot=`pwd`/winsup
+rm -rf BUILDDIR && install -d BUILDDIR/%{target} && cd BUILDDIR
 
-rm -rf BUILDDIR && install -d BUILDDIR && cd BUILDDIR
+# setup system headers for local build.
+cp -ar %{arch}/include %{target}/include
 
 CFLAGS="%{rpmcflags}" \
 CXXFLAGS="%{rpmcflags}" \
 LDFLAGS="%{rpmldflags}" \
 TEXCONFIG=false \
 ../configure \
+	--enable-checking=release \
 	--prefix=%{_prefix} \
 	--infodir=%{_infodir} \
 	--mandir=%{_mandir} \
@@ -90,69 +99,57 @@ TEXCONFIG=false \
 	--with-gnu-as \
 	--with-gnu-ld \
 	--with-sysroot=%{arch} \
-	%{?with_bootstrap:--with-build-sysroot=$build_sysroot} \
 	--%{?with_bootstrap:dis}%{!?with_bootstrap:en}able-shared \
+	--disable-win32-registry \
 	--enable-threads=win32 \
+	--enable-tls \
 	--enable-sjlj-exceptions \
 	--enable-languages="c%{!?with_bootstrap:,c++}" \
+	--disable-multilib \
+	--disable-nls \
+	--disable-libmudflap \
+	--disable-libssp \
+	--disable-plugin \
+	--disable-lto \
 	--enable-c99 \
 	--enable-long-long \
 	--enable-decimal-float=yes \
 	--enable-cmath \
-	--disable-nls \
-	--disable-win32-registry \
-	--with-gnu-as \
-	--with-gnu-ld \
 	--with-mangler-in-ld \
 	--with-gxx-include-dir=%{arch}/include/c++/%{version} \
+	--enable-fully-dynamic-string \
+	--enable-libstdcxx-allocator=new \
 	--disable-libstdcxx-pch \
-	--disable-symvers \
 	--enable-__cxa_atexit \
-	--disable-libmudflap \
-	--disable-libssp \
 	--with-pkgversion="PLD-Linux" \
 	--with-bugurl="http://bugs.pld-linux.org" \
 	--build=%{_target_platform} \
 	--host=%{_target_platform} \
 	--target=%{target}
 
-%{__make}
-
+%{__make} -j4
 cd ..
 
-cat <<EOF >cross-gcc
-#!/bin/sh
-p=`pwd`/BUILDDIR/gcc
-\${p}/xgcc -B\${p} \$@
-EOF
-chmod 755 cross-gcc
-
-export CC=%{?with_bootstrap:`pwd`/cross-gcc}%{!?with_bootstrap:%{_bindir}/%{target}-gcc}
-
-cd trunk/mingw-w64-crt
-
+cd mingw64-crt
+%{__make} distclean
+CC="$PWD/../BUILDDIR/gcc/gcc-cross -B$PWD/../BUILDDIR/gcc/" \
 ./configure \
 	--host=%{target} \
 	--prefix=%{_prefix} \
-	--with-sysroot=%{?with_bootstrap:$build_sysroot}%{!?with_bootstrap:%{arch}}
+	--disable-lib32 --enable-lib64
 
 %{__make}
-
-cd -
+cd ..
 
 %install
-build_sysroot=`pwd`/winsup
-
 rm -rf $RPM_BUILD_ROOT
-install -d $RPM_BUILD_ROOT{%{_bindir},%{_datadir},%{arch}/lib,%{arch}/mingw/include}
+install -d $RPM_BUILD_ROOT
 
 cd BUILDDIR
-
 %{__make} install \
 	DESTDIR=$RPM_BUILD_ROOT
 
 install gcc/specs $RPM_BUILD_ROOT%{gcclib}
-
 cd ..
 
 gccdir=$RPM_BUILD_ROOT%{gcclib}
@@ -160,14 +157,8 @@ mv $gccdir/include-fixed/{limits,syslimits}.h $gccdir/include
 rm -r $gccdir/include-fixed
 rm -r $gccdir/install-tools
 
-
-cp -ar $build_sysroot/mingw/include $RPM_BUILD_ROOT%{arch}
-
-make -C trunk/mingw-w64-crt install \
+%{__make} -C mingw64-crt install \
 	DESTDIR=$RPM_BUILD_ROOT
-
-find $RPM_BUILD_ROOT%{_prefix}/x86_64-pc-mingw32/lib -type f \
-	-exec mv "{}" "$RPM_BUILD_ROOT%{arch}/lib" ";"
 
 %if 0%{!?debug:1}
 %{target}-strip -g -R.note -R.comment $RPM_BUILD_ROOT%{gcclib}/libgcc.a
@@ -187,6 +178,7 @@ rm -rf $RPM_BUILD_ROOT
 %dir %{gccarch}
 %dir %{gcclib}
 %dir %{gcclib}/include
+%{gcclib}/include/abmintrin.h
 %{gcclib}/include/ammintrin.h
 %{gcclib}/include/avxintrin.h
 %{gcclib}/include/bmmintrin.h
@@ -194,20 +186,25 @@ rm -rf $RPM_BUILD_ROOT
 %{gcclib}/include/cross-stdarg.h
 %{gcclib}/include/emmintrin.h
 %{gcclib}/include/float.h
+%{gcclib}/include/fma4intrin.h
+%{gcclib}/include/ia32intrin.h
 %{gcclib}/include/immintrin.h
 %{gcclib}/include/iso646.h
 %{gcclib}/include/limits.h
+%{gcclib}/include/lwpintrin.h
 %{gcclib}/include/mm3dnow.h
 %{gcclib}/include/mm_malloc.h
-%{gcclib}/include/mmintrin-common.h
 %{gcclib}/include/mmintrin.h
 %{gcclib}/include/nmmintrin.h
 %{gcclib}/include/pmmintrin.h
+%{gcclib}/include/popcntintrin.h
 %{gcclib}/include/smmintrin.h
 %{gcclib}/include/stdarg.h
 %{gcclib}/include/stdbool.h
 %{gcclib}/include/stddef.h
 %{gcclib}/include/stdfix.h
+%{gcclib}/include/stdint-gcc.h
+%{gcclib}/include/stdint.h
 %{gcclib}/include/syslimits.h
 %{gcclib}/include/tgmath.h
 %{gcclib}/include/tmmintrin.h
@@ -216,8 +213,10 @@ rm -rf $RPM_BUILD_ROOT
 %{gcclib}/include/wmmintrin.h
 %{gcclib}/include/x86intrin.h
 %{gcclib}/include/xmmintrin.h
+%{gcclib}/include/xopintrin.h
 %attr(755,root,root) %{gcclib}/cc1
 %attr(755,root,root) %{gcclib}/collect2
+%attr(755,root,root) %{gcclib}/lto-wrapper
 %{gcclib}/*.o
 %{gcclib}/libgcc.a
 %if %{without bootstrap}
@@ -229,7 +228,6 @@ rm -rf $RPM_BUILD_ROOT
 %{_mandir}/man1/%{target}-cpp.1*
 %{_mandir}/man1/%{target}-gcc.1*
 %{_mandir}/man1/%{target}-gcov.1*
-%{arch}/include
 %{arch}/lib/*.a
 %if %{without bootstrap}
 %exclude %{arch}/include/c++
@@ -237,8 +235,6 @@ rm -rf $RPM_BUILD_ROOT
 %exclude %{arch}/lib/libsupc++.a
 %endif
 %{arch}/lib/*.o
-%dir %{arch}/mingw
-%{arch}/mingw/include
 
 %if %{without bootstrap}
 %files c++
