@@ -1,0 +1,38 @@
+--- gcc-4.5.1/gcc/config/i386/mingw32.h.orig	2010-04-27 22:14:19.000000000 +0200
++++ gcc-4.5.1/gcc/config/i386/mingw32.h	2010-09-26 15:25:06.466741461 +0200
+@@ -66,7 +66,7 @@
+ /* Override the standard choice of /usr/include as the default prefix
+    to try when searching for header files.  */
+ #undef STANDARD_INCLUDE_DIR
+-#define STANDARD_INCLUDE_DIR "/mingw/include"
++#define STANDARD_INCLUDE_DIR "/include"
+ #undef STANDARD_INCLUDE_COMPONENT
+ #define STANDARD_INCLUDE_COMPONENT "MINGW"
+ 
+@@ -129,7 +129,7 @@
+ 
+ /* Override startfile prefix defaults.  */
+ #ifndef STANDARD_STARTFILE_PREFIX_1
+-#define STANDARD_STARTFILE_PREFIX_1 "/mingw/lib/"
++#define STANDARD_STARTFILE_PREFIX_1 "/lib/"
+ #endif
+ #ifndef STANDARD_STARTFILE_PREFIX_2
+ #define STANDARD_STARTFILE_PREFIX_2 ""
+--- gcc-4.5.1/gcc/config/i386/t-mingw-w64.orig	2009-04-26 15:50:12.000000000 +0200
++++ gcc-4.5.1/gcc/config/i386/t-mingw-w64	2010-09-26 15:56:35.711732633 +0200
+@@ -1,5 +1,5 @@
+ # Match SYSTEM_INCLUDE_DIR
+-NATIVE_SYSTEM_HEADER_DIR = /mingw/include
++NATIVE_SYSTEM_HEADER_DIR = /include
+ 
+ MULTILIB_OPTIONS = m64/m32
+ MULTILIB_DIRNAMES = 64 32
+--- gcc-4.5.1/gcc/config/i386/t-mingw32.orig	2008-09-04 10:25:25.000000000 +0200
++++ gcc-4.5.1/gcc/config/i386/t-mingw32	2010-09-26 15:57:53.088814500 +0200
+@@ -1,5 +1,5 @@
+ # Match SYSTEM_INCLUDE_DIR
+-NATIVE_SYSTEM_HEADER_DIR = /mingw/include
++NATIVE_SYSTEM_HEADER_DIR = /include
+ 
+ # MinGW-specific parts of LIB_SPEC
+ SHLIB_LC = -lmingw32 -lmingwex -lmoldname -lmsvcrt -luser32 -lkernel32 -ladvapi32 -lshell32
