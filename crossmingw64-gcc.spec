@@ -1,3 +1,4 @@
+# TODO: host _bindir is not the place for Win64 .dll!
 #
 # Conditional build:
 %bcond_with	bootstrap	# bootstrap build (only C compiler with static runtime)
