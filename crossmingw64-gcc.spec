@@ -1,4 +1,3 @@
-# TODO: host _bindir is not the place for Win64 .dll!
 #
 # Conditional build:
 %bcond_with	bootstrap	# bootstrap build (only C compiler with static runtime)
@@ -11,7 +10,7 @@ Summary(pt_BR.UTF-8):	Utilitários para desenvolvimento de binários da GNU - Mi
 Summary(tr.UTF-8):	GNU geliştirme araçları - Mingw64 gcc
 Name:		crossmingw64-gcc
 Version:	4.6.0
-Release:	0.1
+Release:	1
 Epoch:		1
 License:	GPL v3+
 Group:		Development/Languages
@@ -157,13 +156,6 @@ cd BUILDDIR
 
 install gcc/specs $RPM_BUILD_ROOT%{gcclib}
 
-%if %{without bootstrap}
-if [ ! -f "$RPM_BUILD_ROOT%{_bindir}/libgcc_s_sjlj-1.dll" ]; then
-	echo "libgcc_s_sjlj-1.dll install still broken?"
-	install %{target}/libgcc/shlib/libgcc_s_sjlj-1.dll $RPM_BUILD_ROOT%{_bindir}
-fi
-%endif
-
 cd ..
 
 gccdir=$RPM_BUILD_ROOT%{gcclib}
@@ -236,7 +228,7 @@ rm -rf $RPM_BUILD_ROOT
 %{gcclib}/*.o
 %{gcclib}/libgcc.a
 %if %{without bootstrap}
-%{_bindir}/libgcc_s_sjlj-1.dll
+%{arch}/lib/libgcc_s_sjlj-1.dll
 %{gcclib}/libgcc_eh.a
 %endif
 %{gcclib}/libgcov.a
@@ -257,7 +249,7 @@ rm -rf $RPM_BUILD_ROOT
 %defattr(644,root,root,755)
 %attr(755,root,root) %{_bindir}/%{target}-[cg]++
 %attr(755,root,root) %{gcclib}/cc1plus
-%{_bindir}/libstdc++-6.dll
+%{arch}/lib/libstdc++-6.dll
 %{arch}/lib/libstdc++.a
 %{arch}/lib/libstdc++.la
 %{arch}/lib/libsupc++.a
