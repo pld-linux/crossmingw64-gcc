@@ -33,6 +33,7 @@ BuildRequires:	flex
 BuildRequires:	gmp-devel >= 4.1
 BuildRequires:	libmpc-devel
 BuildRequires:	mpfr-devel >= 2.3.0
+BuildRequires:	subversion
 BuildRequires:	texinfo >= 4.2
 Requires:	crossmingw64-binutils
 Requires:	crossmingw64-headers
