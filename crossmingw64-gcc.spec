@@ -10,17 +10,17 @@ Summary(pl.UTF-8):	Skrośne narzędzia programistyczne GNU dla Mingw64 - gcc
 Summary(pt_BR.UTF-8):	Utilitários para desenvolvimento de binários da GNU - Mingw64 gcc
 Summary(tr.UTF-8):	GNU geliştirme araçları - Mingw64 gcc
 Name:		crossmingw64-gcc
-Version:	4.5.1
-Release:	1
+Version:	4.6.0
+Release:	0.1
 Epoch:		1
 License:	GPL v3+
 Group:		Development/Languages
 Source0:	ftp://gcc.gnu.org/pub/gcc/releases/gcc-%{version}/gcc-%{version}.tar.bz2
-# Source0-md5:	48231a8e33ed6e058a341c53b819de1a
+# Source0-md5:	93d1c436bf991564524701259b6285a2
 # svn co https://mingw-w64.svn.sourceforge.net/svnroot/mingw-w64/branches/releases/v1.0/mingw-w64-crt mingw64-crt
-%define		_rev	3654
-Source1:	mingw64-crt.tar.bz2
-# Source1-md5:	fd2acf22ae08c8929e384bd74c0cfa55
+%define		_rev	4121
+Source1:	mingw64-crt.tar.xz
+# Source1-md5:	761c887436a8f362b77f5a00f40335b5
 Patch0:		gcc-branch.diff
 Patch1:		gcc-mingw-dirs.patch
 BuildRequires:	autoconf
@@ -114,6 +114,7 @@ TEXCONFIG=false \
 	--disable-multilib \
 	--disable-nls \
 	--disable-libmudflap \
+	--disable-libquadmath \
 	--disable-libssp \
 	--disable-plugin \
 	--disable-lto \
@@ -156,10 +157,12 @@ cd BUILDDIR
 
 install gcc/specs $RPM_BUILD_ROOT%{gcclib}
 
+%if %{without bootstrap}
 if [ ! -f "$RPM_BUILD_ROOT%{_bindir}/libgcc_s_sjlj-1.dll" ]; then
 	echo "libgcc_s_sjlj-1.dll install still broken?"
 	install %{target}/libgcc/shlib/libgcc_s_sjlj-1.dll $RPM_BUILD_ROOT%{_bindir}
 fi
+%endif
 
 cd ..
 
@@ -192,6 +195,7 @@ rm -rf $RPM_BUILD_ROOT
 %{gcclib}/include/abmintrin.h
 %{gcclib}/include/ammintrin.h
 %{gcclib}/include/avxintrin.h
+%{gcclib}/include/bmiintrin.h
 %{gcclib}/include/bmmintrin.h
 %{gcclib}/include/cpuid.h
 %{gcclib}/include/cross-stdarg.h
@@ -210,6 +214,7 @@ rm -rf $RPM_BUILD_ROOT
 %{gcclib}/include/pmmintrin.h
 %{gcclib}/include/popcntintrin.h
 %{gcclib}/include/smmintrin.h
+%{gcclib}/include/tbmintrin.h
 %{gcclib}/include/stdarg.h
 %{gcclib}/include/stdbool.h
 %{gcclib}/include/stddef.h
