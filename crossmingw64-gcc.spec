@@ -9,36 +9,36 @@ Summary(pl.UTF-8):	Skrośne narzędzia programistyczne GNU dla Mingw64 - gcc
 Summary(pt_BR.UTF-8):	Utilitários para desenvolvimento de binários da GNU - Mingw64 gcc
 Summary(tr.UTF-8):	GNU geliştirme araçları - Mingw64 gcc
 Name:		crossmingw64-gcc
-Version:	4.6.0
-Release:	1
+Version:	4.6.2
+Release:	0.1
 Epoch:		1
 License:	GPL v3+
 Group:		Development/Languages
 Source0:	ftp://gcc.gnu.org/pub/gcc/releases/gcc-%{version}/gcc-%{version}.tar.bz2
-# Source0-md5:	93d1c436bf991564524701259b6285a2
-# svn co https://mingw-w64.svn.sourceforge.net/svnroot/mingw-w64/branches/releases/v1.0/mingw-w64-crt mingw64-crt
-%define		_rev	4121
+# Source0-md5:	028115c4fbfb6cfd75d6369f4a90d87e
+# svn co https://mingw-w64.svn.sourceforge.net/svnroot/mingw-w64/stable/v2.x/mingw-w64 mingw64-crt
+%define		_rev	4742
 Source1:	mingw64-crt.tar.xz
-# Source1-md5:	761c887436a8f362b77f5a00f40335b5
+# Source1-md5:	b659532733e015e3618dd9806bcd608c
 Patch0:		gcc-branch.diff
 Patch1:		gcc-mingw-dirs.patch
 BuildRequires:	autoconf
 BuildRequires:	automake
 BuildRequires:	bison
-BuildRequires:	crossmingw64-binutils
+BuildRequires:	crossmingw64-binutils >= 2.22.51.0.1
 %{!?with_bootstrap:BuildRequires:	crossmingw64-gcc}
 BuildRequires:	crossmingw64-headers
 BuildRequires:	flex
 BuildRequires:	gmp-devel >= 4.1
 BuildRequires:	libmpc-devel
 BuildRequires:	mpfr-devel >= 2.3.0
-BuildRequires:	subversion
+BuildRequires:	subversion >= 1.7
 BuildRequires:	texinfo >= 4.2
 Requires:	crossmingw64-binutils
 Requires:	crossmingw64-headers
 BuildRoot:	%{tmpdir}/%{name}-%{version}-root-%(id -u -n)
 
-%define		target		x86_64-pc-mingw32
+%define		target		x86_64-w64-mingw32
 %define		arch		%{_prefix}/%{target}
 %define		gccarch		%{_libdir}/gcc/%{target}
 %define		gcclib		%{gccarch}/%{version}
