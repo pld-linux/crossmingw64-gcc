@@ -10,7 +10,7 @@ Summary(pt_BR.UTF-8):	Utilitários para desenvolvimento de binários da GNU - Mi
 Summary(tr.UTF-8):	GNU geliştirme araçları - Mingw64 gcc
 Name:		crossmingw64-gcc
 Version:	4.6.2
-Release:	0.1
+Release:	1
 Epoch:		1
 License:	GPL v3+
 Group:		Development/Languages
@@ -22,6 +22,8 @@ Source1:	mingw64-crt.tar.xz
 # Source1-md5:	b659532733e015e3618dd9806bcd608c
 Patch0:		gcc-branch.diff
 Patch1:		gcc-mingw-dirs.patch
+Patch2:		gcc-pr51673.patch
+URL:		http://mingw-w64.sourceforge.net/
 BuildRequires:	autoconf
 BuildRequires:	automake
 BuildRequires:	bison
@@ -74,6 +76,7 @@ This package contains cross targeted g++ and libstdc++.
 %setup -q -n gcc-%{version} -a 1
 %patch0 -p0
 %patch1 -p1
+%patch2 -p1
 
 # override snapshot version.
 echo %{version} > gcc/BASE-VER
@@ -125,6 +128,7 @@ TEXCONFIG=false \
 	--with-gxx-include-dir=%{arch}/include/c++/%{version} \
 	--enable-fully-dynamic-string \
 	--enable-libstdcxx-allocator=new \
+	--enable-symvers=gnu-versioned-namespace \
 	--disable-libstdcxx-pch \
 	--enable-__cxa_atexit \
 	--with-pkgversion="PLD-Linux" \
@@ -249,7 +253,7 @@ rm -rf $RPM_BUILD_ROOT
 %defattr(644,root,root,755)
 %attr(755,root,root) %{_bindir}/%{target}-[cg]++
 %attr(755,root,root) %{gcclib}/cc1plus
-%{arch}/lib/libstdc++-6.dll
+%{arch}/lib/libstdc++-7.dll
 %{arch}/lib/libstdc++.a
 %{arch}/lib/libstdc++.la
 %{arch}/lib/libsupc++.a
