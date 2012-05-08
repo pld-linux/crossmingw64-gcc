@@ -9,20 +9,19 @@ Summary(pl.UTF-8):	Skrośne narzędzia programistyczne GNU dla Mingw64 - gcc
 Summary(pt_BR.UTF-8):	Utilitários para desenvolvimento de binários da GNU - Mingw64 gcc
 Summary(tr.UTF-8):	GNU geliştirme araçları - Mingw64 gcc
 Name:		crossmingw64-gcc
-Version:	4.6.3
-Release:	1
+Version:	4.7.0
+Release:	0.1
 Epoch:		1
 License:	GPL v3+
 Group:		Development/Languages
 Source0:	ftp://gcc.gnu.org/pub/gcc/releases/gcc-%{version}/gcc-%{version}.tar.bz2
-# Source0-md5:	773092fe5194353b02bb0110052a972e
+# Source0-md5:	2a0f1d99fda235c29d40b561f81d9a77
 # svn co https://mingw-w64.svn.sourceforge.net/svnroot/mingw-w64/stable/v2.x/mingw-w64 mingw64-crt
-%define		_rev	4742
+%define		_rev	4984
 Source1:	mingw64-crt.tar.xz
-# Source1-md5:	b659532733e015e3618dd9806bcd608c
+# Source1-md5:	b5cb03241f0a39e942bf14bd6e6f624d
 Patch0:		gcc-branch.diff
 Patch1:		gcc-mingw-dirs.patch
-Patch2:		gcc-pr51673.patch
 URL:		http://mingw-w64.sourceforge.net/
 BuildRequires:	autoconf
 BuildRequires:	automake
@@ -76,7 +75,6 @@ This package contains cross targeted g++ and libstdc++.
 %setup -q -n gcc-%{version} -a 1
 %patch0 -p0
 %patch1 -p1
-%patch2 -p1
 
 # override snapshot version.
 echo %{version} > gcc/BASE-VER
@@ -118,6 +116,7 @@ TEXCONFIG=false \
 	--disable-libmudflap \
 	--disable-libquadmath \
 	--disable-libssp \
+	--disable-libitm \
 	--disable-plugin \
 	--disable-lto \
 	--enable-c99 \
@@ -137,7 +136,7 @@ TEXCONFIG=false \
 	--host=%{_target_platform} \
 	--target=%{target}
 
-%{__make} -j4
+%{__make}
 cd ..
 
 cd mingw64-crt
@@ -188,21 +187,25 @@ rm -rf $RPM_BUILD_ROOT
 %dir %{gccarch}
 %dir %{gcclib}
 %dir %{gcclib}/include
-%{gcclib}/include/abmintrin.h
 %{gcclib}/include/ammintrin.h
+%{gcclib}/include/avx2intrin.h
 %{gcclib}/include/avxintrin.h
+%{gcclib}/include/bmi2intrin.h
 %{gcclib}/include/bmiintrin.h
 %{gcclib}/include/bmmintrin.h
 %{gcclib}/include/cpuid.h
 %{gcclib}/include/cross-stdarg.h
 %{gcclib}/include/emmintrin.h
+%{gcclib}/include/f16cintrin.h
 %{gcclib}/include/float.h
 %{gcclib}/include/fma4intrin.h
+%{gcclib}/include/fmaintrin.h
 %{gcclib}/include/ia32intrin.h
 %{gcclib}/include/immintrin.h
 %{gcclib}/include/iso646.h
 %{gcclib}/include/limits.h
 %{gcclib}/include/lwpintrin.h
+%{gcclib}/include/lzcntintrin.h
 %{gcclib}/include/mm3dnow.h
 %{gcclib}/include/mm_malloc.h
 %{gcclib}/include/mmintrin.h
@@ -211,12 +214,14 @@ rm -rf $RPM_BUILD_ROOT
 %{gcclib}/include/popcntintrin.h
 %{gcclib}/include/smmintrin.h
 %{gcclib}/include/tbmintrin.h
+%{gcclib}/include/stdalign.h
 %{gcclib}/include/stdarg.h
 %{gcclib}/include/stdbool.h
 %{gcclib}/include/stddef.h
 %{gcclib}/include/stdfix.h
 %{gcclib}/include/stdint-gcc.h
 %{gcclib}/include/stdint.h
+%{gcclib}/include/stdnoreturn.h
 %{gcclib}/include/syslimits.h
 %{gcclib}/include/tgmath.h
 %{gcclib}/include/tmmintrin.h
