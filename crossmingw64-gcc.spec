@@ -15,7 +15,7 @@ Epoch:		1
 License:	GPL v3+
 Group:		Development/Languages
 Source0:	ftp://gcc.gnu.org/pub/gcc/releases/gcc-%{version}/gcc-%{version}.tar.bz2
-# Source0-md5:	2a0f1d99fda235c29d40b561f81d9a77
+# Source0-md5:	933e6f15f51c031060af64a9e14149ff
 # svn co https://mingw-w64.svn.sourceforge.net/svnroot/mingw-w64/stable/v2.x/mingw-w64 mingw64-crt
 %define		_rev	4984
 Source1:	mingw64-crt.tar.xz
