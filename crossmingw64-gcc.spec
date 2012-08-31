@@ -16,10 +16,10 @@ License:	GPL v3+
 Group:		Development/Languages
 Source0:	ftp://gcc.gnu.org/pub/gcc/releases/gcc-%{version}/gcc-%{version}.tar.bz2
 # Source0-md5:	933e6f15f51c031060af64a9e14149ff
-# svn co https://mingw-w64.svn.sourceforge.net/svnroot/mingw-w64/stable/v2.x/mingw-w64 mingw64-crt
-%define		_rev	4984
+# svn co https://mingw-w64.svn.sourceforge.net/svnroot/mingw-w64/stable/v2.x/mingw-w64-crt mingw64-crt
+%define		_rev	5377
 Source1:	mingw64-crt.tar.xz
-# Source1-md5:	b5cb03241f0a39e942bf14bd6e6f624d
+# Source1-md5:	ee609a06a5ead72f0b203495b5f76527
 Patch0:		gcc-branch.diff
 Patch1:		gcc-mingw-dirs.patch
 URL:		http://mingw-w64.sourceforge.net/
