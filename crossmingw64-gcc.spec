@@ -249,6 +249,7 @@ rm -rf $RPM_BUILD_ROOT
 %if %{without bootstrap}
 %exclude %{arch}/include/c++
 %exclude %{arch}/lib/libstdc++.a
+%exclude %{arch}/lib/libstdc++.dll.a
 %exclude %{arch}/lib/libsupc++.a
 %endif
 %{arch}/lib/*.o
@@ -260,6 +261,7 @@ rm -rf $RPM_BUILD_ROOT
 %attr(755,root,root) %{gcclib}/cc1plus
 %{arch}/lib/libstdc++-7.dll
 %{arch}/lib/libstdc++.a
+%{arch}/lib/libstdc++.dll.a
 %{arch}/lib/libstdc++.la
 %{arch}/lib/libsupc++.a
 %{arch}/lib/libsupc++.la
