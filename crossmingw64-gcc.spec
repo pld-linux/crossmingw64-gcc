@@ -9,18 +9,19 @@ Summary(pl.UTF-8):	Skrośne narzędzia programistyczne GNU dla Mingw64 - gcc
 Summary(pt_BR.UTF-8):	Utilitários para desenvolvimento de binários da GNU - Mingw64 gcc
 Summary(tr.UTF-8):	GNU geliştirme araçları - Mingw64 gcc
 Name:		crossmingw64-gcc
-Version:	4.7.1
-Release:	4
+Version:	4.7.2
+Release:	1
 Epoch:		1
 License:	GPL v3+
 Group:		Development/Languages
 Source0:	ftp://gcc.gnu.org/pub/gcc/releases/gcc-%{version}/gcc-%{version}.tar.bz2
-# Source0-md5:	933e6f15f51c031060af64a9e14149ff
+# Source0-md5:	cc308a0891e778cfda7a151ab8a6e762
 # svn co https://mingw-w64.svn.sourceforge.net/svnroot/mingw-w64/stable/v2.x/mingw-w64-crt mingw64-crt
-%define		_rev	5377
+%define		_rev	5515
 Source1:	mingw64-crt.tar.xz
-# Source1-md5:	ee609a06a5ead72f0b203495b5f76527
+# Source1-md5:	bf9051e7e4deb445e9e8877ca68211e1
 Patch0:		gcc-branch.diff
+# Patch0-md5:	2add58e2b9d9874ba62e05ca9b6b513f
 Patch1:		gcc-mingw-dirs.patch
 URL:		http://mingw-w64.sourceforge.net/
 BuildRequires:	autoconf
