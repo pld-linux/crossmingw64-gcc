@@ -47,6 +47,8 @@ BuildRoot:	%{tmpdir}/%{name}-%{version}-root-%(id -u -n)
 
 %define		_noautostrip	.*/lib.*\\.a
 
+%define		Werror_cflags	%{nil}
+
 # workaround bootstrap bug: http://gcc.gnu.org/bugzilla/PR25672
 %define		filterout	-march=i486 -march=i686 -mtune=pentium4
 
