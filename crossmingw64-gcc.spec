@@ -10,7 +10,7 @@ Summary(pt_BR.UTF-8):	Utilitários para desenvolvimento de binários da GNU - Mi
 Summary(tr.UTF-8):	GNU geliştirme araçları - Mingw64 gcc
 Name:		crossmingw64-gcc
 Version:	4.7.2
-Release:	1
+Release:	2
 Epoch:		1
 License:	GPL v3+
 Group:		Development/Languages
@@ -23,6 +23,7 @@ Source1:	mingw64-crt.tar.xz
 Patch0:		gcc-branch.diff
 # Patch0-md5:	2add58e2b9d9874ba62e05ca9b6b513f
 Patch1:		gcc-mingw-dirs.patch
+Patch2:		gnu_inline-mismatch.patch
 URL:		http://mingw-w64.sourceforge.net/
 BuildRequires:	autoconf
 BuildRequires:	automake
@@ -79,6 +80,7 @@ This package contains cross targeted g++ and libstdc++.
 %setup -q -n gcc-%{version} -a 1
 %patch0 -p0
 %patch1 -p1
+%patch2 -p1
 
 # override snapshot version.
 echo %{version} > gcc/BASE-VER
