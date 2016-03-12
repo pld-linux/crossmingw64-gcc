@@ -24,6 +24,7 @@ Patch0:		gcc-branch.diff
 # Patch0-md5:	2add58e2b9d9874ba62e05ca9b6b513f
 Patch1:		gcc-mingw-dirs.patch
 Patch2:		gnu_inline-mismatch.patch
+Patch3:		texinfo.patch
 URL:		http://mingw-w64.sourceforge.net/
 BuildRequires:	autoconf
 BuildRequires:	automake
@@ -81,11 +82,13 @@ This package contains cross targeted g++ and libstdc++.
 %patch0 -p0
 %patch1 -p1
 %patch2 -p1
+%patch3 -p1
 
 # override snapshot version.
 echo %{version} > gcc/BASE-VER
 echo "release" > gcc/DEV-PHASE
 
+svn upgrade mingw64-crt
 if [ "`svnversion -n mingw64-crt`" != "%{_rev}" ]; then
 	exit 1
 fi
