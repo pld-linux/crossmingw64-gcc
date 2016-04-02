@@ -10,7 +10,7 @@ Summary(pt_BR.UTF-8):	Utilitários para desenvolvimento de binários da GNU - Mi
 Summary(tr.UTF-8):	GNU geliştirme araçları - Mingw64 gcc
 Name:		crossmingw64-gcc
 Version:	4.7.2
-Release:	3
+Release:	4
 Epoch:		1
 License:	GPL v3+
 Group:		Development/Languages
@@ -42,7 +42,7 @@ Requires:	crossmingw64-binutils
 Requires:	crossmingw64-headers
 BuildRoot:	%{tmpdir}/%{name}-%{version}-root-%(id -u -n)
 
-%define		target		x86_64-w64-mingw32
+%define		target		x86_64-w64-mingw64
 %define		arch		%{_prefix}/%{target}
 %define		gccarch		%{_libdir}/gcc/%{target}
 %define		gcclib		%{gccarch}/%{version}
