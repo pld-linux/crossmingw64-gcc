@@ -10,7 +10,7 @@ Summary(pt_BR.UTF-8):	Utilitários para desenvolvimento de binários da GNU - Mi
 Summary(tr.UTF-8):	GNU geliştirme araçları - MinGW-W64 gcc
 Name:		crossmingw64-gcc
 Version:	4.7.2
-Release:	4
+Release:	5
 Epoch:		1
 License:	GPL v3+
 Group:		Development/Languages
