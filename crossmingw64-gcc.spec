@@ -9,21 +9,22 @@ Summary(pl.UTF-8):	Skrośne narzędzia programistyczne GNU dla MinGW-W64 - gcc
 Summary(pt_BR.UTF-8):	Utilitários para desenvolvimento de binários da GNU - MinGW-W64 gcc
 Summary(tr.UTF-8):	GNU geliştirme araçları - MinGW-W64 gcc
 Name:		crossmingw64-gcc
-Version:	6.4.0
+Version:	6.5.0
 Release:	1
 Epoch:		1
 License:	GPL v3+
 Group:		Development/Languages
 Source0:	https://ftp.gnu.org/gnu/gcc/gcc-%{version}/gcc-%{version}.tar.xz
-# Source0-md5:	11ba51a0cfb8471927f387c8895fe232
+# Source0-md5:	edaeff1cc020b16a0c19a6d5e80dc2fd
 # svn co https://mingw-w64.svn.sourceforge.net/svnroot/mingw-w64/stable/v2.x/mingw-w64-crt mingw64-crt
 %define		_rev	5515
 Source1:	mingw64-crt.tar.xz
 # Source1-md5:	bf9051e7e4deb445e9e8877ca68211e1
 Patch0:		gcc-branch.diff
-# Patch0-md5:	1d4bc26154e47de7d727d6767215e776
+# Patch0-md5:	5ad5a566cbaf57f985192534e5ef1c32
 Patch1:		gcc-mingw-dirs.patch
 Patch2:		gcc-mingw64.patch
+Patch3:		gcc-c++98.patch
 URL:		http://mingw-w64.sourceforge.net/
 BuildRequires:	autoconf >= 2.64
 BuildRequires:	automake >= 1:1.11.1
@@ -195,6 +196,7 @@ libstdc++ 64-bit DLL library for Windows.
 %patch0 -p0
 %patch1 -p1
 %patch2 -p1
+%patch3 -p1
 
 # override snapshot version.
 echo %{version} > gcc/BASE-VER
