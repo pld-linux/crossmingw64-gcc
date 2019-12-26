@@ -9,22 +9,20 @@ Summary(pl.UTF-8):	Skrośne narzędzia programistyczne GNU dla MinGW-W64 - gcc
 Summary(pt_BR.UTF-8):	Utilitários para desenvolvimento de binários da GNU - MinGW-W64 gcc
 Summary(tr.UTF-8):	GNU geliştirme araçları - MinGW-W64 gcc
 Name:		crossmingw64-gcc
-Version:	6.5.0
-Release:	2
+Version:	7.5.0
+Release:	1
 Epoch:		1
 License:	GPL v3+
 Group:		Development/Languages
 Source0:	https://ftp.gnu.org/gnu/gcc/gcc-%{version}/gcc-%{version}.tar.xz
-# Source0-md5:	edaeff1cc020b16a0c19a6d5e80dc2fd
+# Source0-md5:	79cb8a65d44dfc8a2402b46395535c9a
 # svn co https://mingw-w64.svn.sourceforge.net/svnroot/mingw-w64/stable/v2.x/mingw-w64-crt mingw64-crt
 %define		_rev	5515
 Source1:	mingw64-crt.tar.xz
 # Source1-md5:	bf9051e7e4deb445e9e8877ca68211e1
-Patch0:		gcc-branch.diff
-# Patch0-md5:	5ad5a566cbaf57f985192534e5ef1c32
+#Patch0:		gcc-branch.diff
 Patch1:		gcc-mingw-dirs.patch
 Patch2:		gcc-mingw64.patch
-Patch3:		gcc-c++98.patch
 URL:		http://mingw-w64.sourceforge.net/
 BuildRequires:	autoconf >= 2.64
 BuildRequires:	automake >= 1:1.11.1
@@ -193,10 +191,9 @@ libstdc++ 64-bit DLL library for Windows.
 
 %prep
 %setup -q -n gcc-%{version} -a 1
-%patch0 -p0
+#patch0 -p0
 %patch1 -p1
 %patch2 -p1
-%patch3 -p1
 
 # override snapshot version.
 echo %{version} > gcc/BASE-VER
@@ -226,7 +223,7 @@ TEXCONFIG=false \
 	--infodir=%{_infodir} \
 	--mandir=%{_mandir} \
 	--with-bugurl="http://bugs.pld-linux.org" \
-	--with-built-time-tools=%{archbindir} \
+	--with-build-time-tools=%{archbindir} \
 	--with-demangler-in-ld \
 	--with-dwarf2 \
 	--with-gnu-as \
@@ -351,12 +348,29 @@ rm -rf $RPM_BUILD_ROOT
 %attr(755,root,root) %{archbindir}/%{target}-gcov
 %attr(755,root,root) %{archbindir}/%{target}-gcov-dump
 %attr(755,root,root) %{archbindir}/%{target}-gcov-tool
+%if %{without bootstrap}
+%{archlibdir}/libgcc_s.a
+%endif
 %dir %{gccarchdir}
 %dir %{gcclibdir}
+%attr(755,root,root) %{gcclibdir}/cc1
+%attr(755,root,root) %{gcclibdir}/collect2
+%attr(755,root,root) %{gcclibdir}/lto-wrapper
+%{gcclibdir}/libgcc.a
+%if %{without bootstrap}
+%{gcclibdir}/libgcc_eh.a
+%endif
+%{gcclibdir}/libgcov.a
+%{gcclibdir}/crtbegin.o
+%{gcclibdir}/crtend.o
+%{gcclibdir}/crtfastmath.o
+%{gcclibdir}/specs
 %dir %{gcclibdir}/include
 %{gcclibdir}/include/adxintrin.h
 %{gcclibdir}/include/ammintrin.h
 %{gcclibdir}/include/avx2intrin.h
+%{gcclibdir}/include/avx5124fmapsintrin.h
+%{gcclibdir}/include/avx5124vnniwintrin.h
 %{gcclibdir}/include/avx512bwintrin.h
 %{gcclibdir}/include/avx512cdintrin.h
 %{gcclibdir}/include/avx512dqintrin.h
@@ -370,6 +384,7 @@ rm -rf $RPM_BUILD_ROOT
 %{gcclibdir}/include/avx512vlbwintrin.h
 %{gcclibdir}/include/avx512vldqintrin.h
 %{gcclibdir}/include/avx512vlintrin.h
+%{gcclibdir}/include/avx512vpopcntdqintrin.h
 %{gcclibdir}/include/avxintrin.h
 %{gcclibdir}/include/bmi2intrin.h
 %{gcclibdir}/include/bmiintrin.h
@@ -385,6 +400,7 @@ rm -rf $RPM_BUILD_ROOT
 %{gcclibdir}/include/fma4intrin.h
 %{gcclibdir}/include/fmaintrin.h
 %{gcclibdir}/include/fxsrintrin.h
+%{gcclibdir}/include/gcov.h
 %{gcclibdir}/include/ia32intrin.h
 %{gcclibdir}/include/immintrin.h
 %{gcclibdir}/include/iso646.h
@@ -402,6 +418,7 @@ rm -rf $RPM_BUILD_ROOT
 %{gcclibdir}/include/prfchwintrin.h
 %{gcclibdir}/include/rdseedintrin.h
 %{gcclibdir}/include/rtmintrin.h
+%{gcclibdir}/include/sgxintrin.h
 %{gcclibdir}/include/shaintrin.h
 %{gcclibdir}/include/smmintrin.h
 %{gcclibdir}/include/stdalign.h
@@ -428,24 +445,13 @@ rm -rf $RPM_BUILD_ROOT
 %{gcclibdir}/include/xsaveoptintrin.h
 %{gcclibdir}/include/xsavesintrin.h
 %{gcclibdir}/include/xtestintrin.h
-%attr(755,root,root) %{gcclibdir}/cc1
-%attr(755,root,root) %{gcclibdir}/collect2
-%attr(755,root,root) %{gcclibdir}/lto-wrapper
-%{gcclibdir}/crtbegin.o
-%{gcclibdir}/crtend.o
-%{gcclibdir}/crtfastmath.o
-%{gcclibdir}/libgcc.a
-%if %{without bootstrap}
-%{archlibdir}/libgcc_s.a
-%{gcclibdir}/libgcc_eh.a
-%endif
-%{gcclibdir}/libgcov.a
-%{gcclibdir}/specs
 %{_mandir}/man1/%{target}-cpp.1*
 %{_mandir}/man1/%{target}-gcc.1*
 %{_mandir}/man1/%{target}-gcov.1*
 %{_mandir}/man1/%{target}-gcov-dump.1*
 %{_mandir}/man1/%{target}-gcov-tool.1*
+
+# mingw-w64 runtime
 %{archlibdir}/CRT_*.o
 %{archlibdir}/binmode.o
 %{archlibdir}/crt*.o
@@ -1571,8 +1577,8 @@ rm -rf $RPM_BUILD_ROOT
 %attr(755,root,root) %{gcclibdir}/cc1plus
 %{archlibdir}/libstdc++.dll.a
 %{archlibdir}/libstdc++.la
-%{archlibdir}/libsupc++.a
 %{archlibdir}/libsupc++.la
+%{archlibdir}/libsupc++.a
 %{archincludedir}/c++
 %{_mandir}/man1/%{target}-g++.1*
 
