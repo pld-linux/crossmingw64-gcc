@@ -9,13 +9,13 @@ Summary(pl.UTF-8):	Skrośne narzędzia programistyczne GNU dla MinGW-W64 - gcc
 Summary(pt_BR.UTF-8):	Utilitários para desenvolvimento de binários da GNU - MinGW-W64 gcc
 Summary(tr.UTF-8):	GNU geliştirme araçları - MinGW-W64 gcc
 Name:		crossmingw64-gcc
-Version:	7.5.0
+Version:	8.5.0
 Release:	1
 Epoch:		1
 License:	GPL v3+
 Group:		Development/Languages
 Source0:	https://ftp.gnu.org/gnu/gcc/gcc-%{version}/gcc-%{version}.tar.xz
-# Source0-md5:	79cb8a65d44dfc8a2402b46395535c9a
+# Source0-md5:	0c1f625768840187ef3b10adebe8e3b0
 # svn co https://mingw-w64.svn.sourceforge.net/svnroot/mingw-w64/stable/v2.x/mingw-w64-crt mingw64-crt
 %define		_rev	5515
 Source1:	mingw64-crt.tar.xz
@@ -23,7 +23,7 @@ Source1:	mingw64-crt.tar.xz
 #Patch0:		gcc-branch.diff
 Patch1:		gcc-mingw-dirs.patch
 Patch2:		gcc-mingw64.patch
-URL:		http://mingw-w64.sourceforge.net/
+URL:		https://www.mingw-w64.org/
 BuildRequires:	autoconf >= 2.64
 BuildRequires:	automake >= 1:1.11.1
 BuildRequires:	bison
@@ -277,7 +277,7 @@ CC="$PWD/../BUILDDIR/gcc/gcc-cross -B$PWD/../BUILDDIR/gcc/" \
 	--disable-lib32 \
 	--enable-lib64
 
-%{__make}
+%{__make} -j1
 cd ..
 
 %install
@@ -302,7 +302,7 @@ ln -sf %{archbindir}/%{target}-gcov $RPM_BUILD_ROOT%{_bindir}/%{target}-gcov
 ln -sf %{archbindir}/%{target}-gcov-dump $RPM_BUILD_ROOT%{_bindir}/%{target}-gcov-dump
 ln -sf %{archbindir}/%{target}-gcov-tool $RPM_BUILD_ROOT%{_bindir}/%{target}-gcov-tool
 
-%{__make} -C mingw64-crt install \
+%{__make} -C mingw64-crt -j1 install \
 	DESTDIR=$RPM_BUILD_ROOT
 
 %{__rm} -r $RPM_BUILD_ROOT%{archprefix}/libsrc
@@ -371,6 +371,7 @@ rm -rf $RPM_BUILD_ROOT
 %{gcclibdir}/include/avx2intrin.h
 %{gcclibdir}/include/avx5124fmapsintrin.h
 %{gcclibdir}/include/avx5124vnniwintrin.h
+%{gcclibdir}/include/avx512bitalgintrin.h
 %{gcclibdir}/include/avx512bwintrin.h
 %{gcclibdir}/include/avx512cdintrin.h
 %{gcclibdir}/include/avx512dqintrin.h
@@ -379,16 +380,23 @@ rm -rf $RPM_BUILD_ROOT
 %{gcclibdir}/include/avx512ifmaintrin.h
 %{gcclibdir}/include/avx512ifmavlintrin.h
 %{gcclibdir}/include/avx512pfintrin.h
+%{gcclibdir}/include/avx512vbmi2intrin.h
+%{gcclibdir}/include/avx512vbmi2vlintrin.h
 %{gcclibdir}/include/avx512vbmiintrin.h
 %{gcclibdir}/include/avx512vbmivlintrin.h
 %{gcclibdir}/include/avx512vlbwintrin.h
 %{gcclibdir}/include/avx512vldqintrin.h
 %{gcclibdir}/include/avx512vlintrin.h
+%{gcclibdir}/include/avx512vnniintrin.h
+%{gcclibdir}/include/avx512vnnivlintrin.h
 %{gcclibdir}/include/avx512vpopcntdqintrin.h
+%{gcclibdir}/include/avx512vpopcntdqvlintrin.h
 %{gcclibdir}/include/avxintrin.h
 %{gcclibdir}/include/bmi2intrin.h
 %{gcclibdir}/include/bmiintrin.h
 %{gcclibdir}/include/bmmintrin.h
+%{gcclibdir}/include/cet.h
+%{gcclibdir}/include/cetintrin.h
 %{gcclibdir}/include/clflushoptintrin.h
 %{gcclibdir}/include/clwbintrin.h
 %{gcclibdir}/include/clzerointrin.h
@@ -401,6 +409,7 @@ rm -rf $RPM_BUILD_ROOT
 %{gcclibdir}/include/fmaintrin.h
 %{gcclibdir}/include/fxsrintrin.h
 %{gcclibdir}/include/gcov.h
+%{gcclibdir}/include/gfniintrin.h
 %{gcclibdir}/include/ia32intrin.h
 %{gcclibdir}/include/immintrin.h
 %{gcclibdir}/include/iso646.h
@@ -410,8 +419,10 @@ rm -rf $RPM_BUILD_ROOT
 %{gcclibdir}/include/mm3dnow.h
 %{gcclibdir}/include/mm_malloc.h
 %{gcclibdir}/include/mmintrin.h
+%{gcclibdir}/include/movdirintrin.h
 %{gcclibdir}/include/mwaitxintrin.h
 %{gcclibdir}/include/nmmintrin.h
+%{gcclibdir}/include/pconfigintrin.h
 %{gcclibdir}/include/pmmintrin.h
 %{gcclibdir}/include/pkuintrin.h
 %{gcclibdir}/include/popcntintrin.h
@@ -435,7 +446,10 @@ rm -rf $RPM_BUILD_ROOT
 %{gcclibdir}/include/tgmath.h
 %{gcclibdir}/include/tmmintrin.h
 %{gcclibdir}/include/unwind.h
+%{gcclibdir}/include/vaesintrin.h
 %{gcclibdir}/include/varargs.h
+%{gcclibdir}/include/vpclmulqdqintrin.h
+%{gcclibdir}/include/wbnoinvdintrin.h
 %{gcclibdir}/include/wmmintrin.h
 %{gcclibdir}/include/x86intrin.h
 %{gcclibdir}/include/xmmintrin.h
@@ -1588,5 +1602,5 @@ rm -rf $RPM_BUILD_ROOT
 
 %files -n crossmingw64-libstdc++-dll
 %defattr(644,root,root,755)
-%{_dll64dir}/libstdc++-7.dll
+%{_dll64dir}/libstdc++-8.dll
 %endif
