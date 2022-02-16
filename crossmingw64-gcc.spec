@@ -126,7 +126,7 @@ Requires:	crossmingw64-libatomic = %{epoch}:%{version}-%{release}
 %description -n crossmingw64-libatomic-static
 The GNU Atomic static library - cross MinGW-W64 version.
 
-%description -n crossmingw64-libatomic-static
+%description -n crossmingw64-libatomic-static -l pl.UTF-8
 Statyczna biblioteka GNU Atomic - wersja skrośna MinGW-W64.
 
 %package -n crossmingw64-libatomic-dll
@@ -239,6 +239,7 @@ TEXCONFIG=false \
 	--enable-fully-dynamic-string \
 	--disable-isl-version-check \
 	--enable-languages="c%{!?with_bootstrap:,c++}" \
+	%{?with_bootstrap:--disable-libatomic} \
 	--disable-libcc1 \
 	--disable-libitm \
 	--disable-libquadmath \
@@ -313,7 +314,9 @@ ln -sf %{archbindir}/%{target}-gcov-tool $RPM_BUILD_ROOT%{_bindir}/%{target}-gco
 #%{__mv} $RPM_BUILD_ROOT%{archlibdir} $RPM_BUILD_ROOT%{_dll64dir}
 
 %if 0%{!?debug:1}
+%if %{without bootstrap}
 %{target}-strip --strip-unneeded -R.comment -R.note $RPM_BUILD_ROOT%{_dll64dir}/*.dll
+%endif
 %{target}-strip -g -R.note -R.comment $RPM_BUILD_ROOT%{gcclibdir}/libgcc.a
 %{target}-strip -g -R.note -R.comment $RPM_BUILD_ROOT%{gcclibdir}/libgcov.a
 %{target}-strip -g -R.note -R.comment $RPM_BUILD_ROOT%{archlibdir}/*.a
