@@ -10,17 +10,29 @@
  // See libstdc++/43738
  // On native windows targets there is no ioctl function. And the existing
  // ioctlsocket function doesn't work for normal file-descriptors.
---- gcc-6.4.0/libstdc++-v3/config/os/mingw32-w64/error_constants.h.orig	2017-05-18 16:34:56.460210000 +0200
-+++ gcc-6.4.0/libstdc++-v3/config/os/mingw32-w64/error_constants.h	2018-07-29 10:20:28.262937329 +0200
-@@ -32,6 +32,7 @@
+--- gcc-9.5.0/libstdc++-v3/config/os/mingw32-w64/error_constants.h.orig	2022-05-27 09:21:13.331391181 +0200
++++ gcc-9.5.0/libstdc++-v3/config/os/mingw32-w64/error_constants.h	2023-04-16 22:02:42.746235485 +0200
+@@ -32,6 +32,19 @@
  
  #include <bits/c++config.h>
  #include <cerrno>
 +#include <psdk_inc/_wsa_errnos.h>
++
++#ifndef EOVERFLOW
++#define EOVERFLOW ERANGE
++#endif
++
++#ifndef ELOOP
++#define ELOOP ERANGE
++#endif
++
++#ifndef ENOTSUP
++#define ENOTSUP ENOSYS
++#endif
  
  namespace std _GLIBCXX_VISIBILITY(default)
  {
-@@ -41,10 +42,10 @@
+@@ -41,10 +42,10 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
  // replaced by Winsock WSA-prefixed equivalents.
    enum class errc
      {
@@ -35,7 +47,7 @@
        argument_list_too_long = 			E2BIG,
        argument_out_of_domain = 			EDOM,
        bad_address = 				EFAULT,
-@@ -53,12 +54,12 @@
+@@ -53,12 +54,12 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
        bad_message = 				EBADMSG,
  #endif
        broken_pipe = 				EPIPE,
@@ -53,16 +65,16 @@
        device_or_resource_busy = 		EBUSY,
        directory_not_empty = 			ENOTEMPTY,
        executable_format_error = 		ENOEXEC,
-@@ -66,7 +67,7 @@
+@@ -66,7 +67,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
        file_too_large = 				EFBIG,
        filename_too_long = 			ENAMETOOLONG,
        function_not_supported = 			ENOSYS,
 -      host_unreachable = 			EHOSTUNREACH,
 +      host_unreachable = 			WSAEHOSTUNREACH,
- #ifdef _GLIBCXX_HAVE_EIDRM
+ #ifdef EIDRM
        identifier_removed = 			EIDRM,
  #endif
-@@ -77,11 +78,11 @@
+@@ -77,11 +78,11 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
        invalid_seek = 				ESPIPE,
        io_error = 				EIO,
        is_a_directory = 				EISDIR,
@@ -76,46 +88,46 @@
 +      network_reset = 				WSAENETRESET,
 +      network_unreachable = 			WSAENETUNREACH,
 +      no_buffer_space = 			WSAENOBUFS,
- #ifdef _GLIBCXX_HAVE_ECHILD
+ #ifdef ECHILD
        no_child_process = 			ECHILD,
  #endif
-@@ -95,7 +96,7 @@
- #ifdef _GLIBCXX_HAVE_ENOMSG
+@@ -95,7 +96,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
+ #ifdef ENOMSG
        no_message = 				ENOMSG,
  #endif
 -      no_protocol_option = 			ENOPROTOOPT,
 +      no_protocol_option = 			WSAENOPROTOOPT,
- #ifdef _GLIBCXX_HAVE_ENOSPC
+ #ifdef ENOSPC
        no_space_on_device = 			ENOSPC,
  #endif
-@@ -107,21 +108,21 @@
+@@ -107,21 +108,21 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
        no_such_file_or_directory = 		ENOENT,
        no_such_process = 			ESRCH,
        not_a_directory = 			ENOTDIR,
 -      not_a_socket = 				ENOTSOCK,
 +      not_a_socket = 				WSAENOTSOCK,
- #ifdef _GLIBCXX_HAVE_ENOSTR
+ #ifdef ENOSTR
        not_a_stream = 				ENOSTR,
  #endif
 -      not_connected = 				ENOTCONN,
 +      not_connected = 				WSAENOTCONN,
        not_enough_memory = 			ENOMEM,
- #ifdef _GLIBCXX_HAVE_ENOTSUP
+ #ifdef ENOTSUP
        not_supported = 				ENOTSUP,
  #endif
 -      operation_canceled = 			ECANCELED,
 -      operation_in_progress = 			EINPROGRESS,
 +//      operation_canceled = 			WSAECANCELLED, // winsock2 only
 +      operation_in_progress = 			WSAEINPROGRESS,
- #ifdef _GLIBCXX_HAVE_EPERM
+ #ifdef EPERM
        operation_not_permitted = 		EPERM,
  #endif
 -      operation_not_supported = 		EOPNOTSUPP,
 +      operation_not_supported = 		WSAEOPNOTSUPP,
- #ifdef _GLIBCXX_HAVE_EWOULDBLOCK
+ #ifdef EWOULDBLOCK
        operation_would_block = 			EWOULDBLOCK,
  #endif
-@@ -129,8 +130,8 @@
+@@ -129,8 +130,8 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
        owner_dead = 				EOWNERDEAD,
  #endif
        permission_denied = 			EACCES,
@@ -126,13 +138,13 @@
        read_only_file_system = 			EROFS,
        resource_deadlock_would_occur = 		EDEADLK,
        resource_unavailable_try_again = 		EAGAIN,
-@@ -150,11 +151,11 @@
+@@ -150,11 +151,11 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
        too_many_files_open_in_system = 		ENFILE,
        too_many_files_open = 			EMFILE,
        too_many_links = 				EMLINK,
 -      too_many_symbolic_link_levels = 		ELOOP,
 +      too_many_symbolic_link_levels = 		WSAELOOP,
- #ifdef _GLIBCXX_HAVE_EOVERFLOW
+ #ifdef EOVERFLOW
        value_too_large = 			EOVERFLOW,
  #endif
 -      wrong_protocol_type = 			EPROTOTYPE
@@ -140,3 +152,32 @@
     };
  
  _GLIBCXX_END_NAMESPACE_VERSION
+--- gcc-9.5.0/libstdc++-v3/src/c++11/system_error.cc.orig	2022-05-27 09:21:13.447391751 +0200
++++ gcc-9.5.0/libstdc++-v3/src/c++11/system_error.cc	2023-04-16 20:09:05.676500055 +0200
+@@ -168,7 +168,7 @@ namespace
+ #ifdef EISDIR
+       case EISDIR:
+ #endif
+-#ifdef ELOOP
++#if defined(ELOOP) && (ELOOP != ERANGE)
+       case ELOOP:
+ #endif
+ #ifdef EMFILE
+@@ -253,7 +253,7 @@ namespace
+ #ifdef ENOTSOCK
+       case ENOTSOCK:
+ #endif
+-#ifdef ENOTSUP
++#if defined (ENOTSUP) && (ENOTSUP != ENOSYS)
+       case ENOTSUP:
+ #endif
+ #ifdef ENOTTY
+@@ -265,7 +265,7 @@ namespace
+ #if defined EOPNOTSUPP && (!defined ENOTSUP || EOPNOTSUPP != ENOTSUP)
+       case EOPNOTSUPP:
+ #endif
+-#ifdef EOVERFLOW
++#if defined(EOVERFLOW) && (EOVERFLOW != ERANGE)
+       case EOVERFLOW:
+ #endif
+ #ifdef EOWNERDEAD

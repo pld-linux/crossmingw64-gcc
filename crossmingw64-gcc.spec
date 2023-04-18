@@ -9,13 +9,13 @@ Summary(pl.UTF-8):	Skrośne narzędzia programistyczne GNU dla MinGW-W64 - gcc
 Summary(pt_BR.UTF-8):	Utilitários para desenvolvimento de binários da GNU - MinGW-W64 gcc
 Summary(tr.UTF-8):	GNU geliştirme araçları - MinGW-W64 gcc
 Name:		crossmingw64-gcc
-Version:	8.5.0
-Release:	2
+Version:	9.5.0
+Release:	1
 Epoch:		1
 License:	GPL v3+
 Group:		Development/Languages
 Source0:	https://ftp.gnu.org/gnu/gcc/gcc-%{version}/gcc-%{version}.tar.xz
-# Source0-md5:	0c1f625768840187ef3b10adebe8e3b0
+# Source0-md5:	34cd76facb562835ff5faca81fead17e
 # svn co https://mingw-w64.svn.sourceforge.net/svnroot/mingw-w64/stable/v2.x/mingw-w64-crt mingw64-crt
 %define		_rev	5515
 Source1:	mingw64-crt.tar.xz
@@ -400,6 +400,7 @@ rm -rf $RPM_BUILD_ROOT
 %{gcclibdir}/include/bmmintrin.h
 %{gcclibdir}/include/cet.h
 %{gcclibdir}/include/cetintrin.h
+%{gcclibdir}/include/cldemoteintrin.h
 %{gcclibdir}/include/clflushoptintrin.h
 %{gcclibdir}/include/clwbintrin.h
 %{gcclibdir}/include/clzerointrin.h
@@ -452,6 +453,7 @@ rm -rf $RPM_BUILD_ROOT
 %{gcclibdir}/include/vaesintrin.h
 %{gcclibdir}/include/varargs.h
 %{gcclibdir}/include/vpclmulqdqintrin.h
+%{gcclibdir}/include/waitpkgintrin.h
 %{gcclibdir}/include/wbnoinvdintrin.h
 %{gcclibdir}/include/wmmintrin.h
 %{gcclibdir}/include/x86intrin.h
