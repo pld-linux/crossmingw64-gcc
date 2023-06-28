@@ -9,13 +9,13 @@ Summary(pl.UTF-8):	Skrośne narzędzia programistyczne GNU dla MinGW-W64 - gcc
 Summary(pt_BR.UTF-8):	Utilitários para desenvolvimento de binários da GNU - MinGW-W64 gcc
 Summary(tr.UTF-8):	GNU geliştirme araçları - MinGW-W64 gcc
 Name:		crossmingw64-gcc
-Version:	9.5.0
+Version:	10.4.0
 Release:	1
 Epoch:		1
 License:	GPL v3+
 Group:		Development/Languages
 Source0:	https://ftp.gnu.org/gnu/gcc/gcc-%{version}/gcc-%{version}.tar.xz
-# Source0-md5:	34cd76facb562835ff5faca81fead17e
+# Source0-md5:	d307b8748a74939359a5843f859a4dec
 # svn co https://mingw-w64.svn.sourceforge.net/svnroot/mingw-w64/stable/v2.x/mingw-w64-crt mingw64-crt
 %define		_rev	5515
 Source1:	mingw64-crt.tar.xz
@@ -27,7 +27,7 @@ URL:		https://www.mingw-w64.org/
 BuildRequires:	autoconf >= 2.64
 BuildRequires:	automake >= 1:1.11.1
 BuildRequires:	bison
-BuildRequires:	crossmingw64-binutils >= 2.23
+BuildRequires:	crossmingw64-binutils >= 2.30
 %{!?with_bootstrap:BuildRequires:	crossmingw64-gcc}
 BuildRequires:	crossmingw64-headers
 BuildRequires:	flex >= 2.5.4
@@ -36,20 +36,20 @@ BuildRequires:	gmp-devel >= 4.3.2
 BuildRequires:	isl-devel >= 0.15
 BuildRequires:	libmpc-devel >= 0.8.1
 BuildRequires:	libstdc++-devel
-BuildRequires:	mpfr-devel >= 2.4.2
+BuildRequires:	mpfr-devel >= 3.1.0
 BuildRequires:	perl-tools-pod
 BuildRequires:	subversion >= 1.7
 BuildRequires:	tar >= 1:1.22
 BuildRequires:	texinfo >= 4.7
 BuildRequires:	xz
 BuildRequires:	zlib-devel
-Requires:	crossmingw64-binutils >= 2.23
+Requires:	crossmingw64-binutils >= 2.30
 Requires:	crossmingw64-headers
 Requires:	gcc-dirs
 Requires:	gmp >= 4.3.2
 Requires:	isl >= 0.15
 Requires:	libmpc >= 0.8.1
-Requires:	mpfr >= 2.4.2
+Requires:	mpfr >= 3.1.0
 BuildRoot:	%{tmpdir}/%{name}-%{version}-root-%(id -u -n)
 
 %define		target		x86_64-w64-mingw32
@@ -374,6 +374,8 @@ rm -rf $RPM_BUILD_ROOT
 %{gcclibdir}/include/avx2intrin.h
 %{gcclibdir}/include/avx5124fmapsintrin.h
 %{gcclibdir}/include/avx5124vnniwintrin.h
+%{gcclibdir}/include/avx512bf16intrin.h
+%{gcclibdir}/include/avx512bf16vlintrin.h
 %{gcclibdir}/include/avx512bitalgintrin.h
 %{gcclibdir}/include/avx512bwintrin.h
 %{gcclibdir}/include/avx512cdintrin.h
@@ -392,6 +394,8 @@ rm -rf $RPM_BUILD_ROOT
 %{gcclibdir}/include/avx512vlintrin.h
 %{gcclibdir}/include/avx512vnniintrin.h
 %{gcclibdir}/include/avx512vnnivlintrin.h
+%{gcclibdir}/include/avx512vp2intersectintrin.h
+%{gcclibdir}/include/avx512vp2intersectvlintrin.h
 %{gcclibdir}/include/avx512vpopcntdqintrin.h
 %{gcclibdir}/include/avx512vpopcntdqvlintrin.h
 %{gcclibdir}/include/avxintrin.h
@@ -407,6 +411,7 @@ rm -rf $RPM_BUILD_ROOT
 %{gcclibdir}/include/cpuid.h
 %{gcclibdir}/include/cross-stdarg.h
 %{gcclibdir}/include/emmintrin.h
+%{gcclibdir}/include/enqcmdintrin.h
 %{gcclibdir}/include/f16cintrin.h
 %{gcclibdir}/include/float.h
 %{gcclibdir}/include/fma4intrin.h
@@ -1596,6 +1601,8 @@ rm -rf $RPM_BUILD_ROOT
 %attr(755,root,root) %{gcclibdir}/cc1plus
 %{archlibdir}/libstdc++.dll.a
 %{archlibdir}/libstdc++.la
+%{archlibdir}/libstdc++fs.la
+%{archlibdir}/libstdc++fs.a
 %{archlibdir}/libsupc++.la
 %{archlibdir}/libsupc++.a
 %{archincludedir}/c++

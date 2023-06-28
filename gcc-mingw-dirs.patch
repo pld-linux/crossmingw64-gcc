@@ -18,14 +18,14 @@
  
  /* Output STRING, a string representing a filename, to FILE.
     We canonicalize it to be in Unix format (backslashes are replaced
---- gcc-4.7.0/gcc/config.gcc.orig	2012-05-08 22:38:05.000000000 +0200
-+++ gcc-4.7.0/gcc/config.gcc	2012-05-08 22:48:39.276921083 +0200
-@@ -1465,7 +1465,7 @@
+--- gcc-10.4.0/gcc/config.gcc.orig	2023-06-28 06:17:39.251234129 +0200
++++ gcc-10.4.0/gcc/config.gcc	2023-06-28 06:20:01.677654209 +0200
+@@ -2200,7 +2200,7 @@ i[34567]86-*-mingw* | x86_64-*-mingw*)
  			tmake_file="${tmake_file} i386/t-mingw-w32"
  			;;
  	esac
 -        native_system_header_dir=/mingw/include
 +        native_system_header_dir=/include
- 	target_gtfiles="\$(srcdir)/config/i386/winnt.c"
+ 	target_gtfiles="$target_gtfiles \$(srcdir)/config/i386/winnt.c"
  	extra_options="${extra_options} i386/cygming.opt i386/mingw.opt"
  	case ${target} in

@@ -163,15 +163,6 @@
        case ELOOP:
  #endif
  #ifdef EMFILE
-@@ -253,7 +253,7 @@ namespace
- #ifdef ENOTSOCK
-       case ENOTSOCK:
- #endif
--#ifdef ENOTSUP
-+#if defined (ENOTSUP) && (ENOTSUP != ENOSYS)
-       case ENOTSUP:
- #endif
- #ifdef ENOTTY
 @@ -265,7 +265,7 @@ namespace
  #if defined EOPNOTSUPP && (!defined ENOTSUP || EOPNOTSUPP != ENOTSUP)
        case EOPNOTSUPP:
