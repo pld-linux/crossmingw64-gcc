@@ -9,13 +9,13 @@ Summary(pl.UTF-8):	Skrośne narzędzia programistyczne GNU dla MinGW-W64 - gcc
 Summary(pt_BR.UTF-8):	Utilitários para desenvolvimento de binários da GNU - MinGW-W64 gcc
 Summary(tr.UTF-8):	GNU geliştirme araçları - MinGW-W64 gcc
 Name:		crossmingw64-gcc
-Version:	10.4.0
+Version:	10.5.0
 Release:	1
 Epoch:		1
 License:	GPL v3+
 Group:		Development/Languages
 Source0:	https://ftp.gnu.org/gnu/gcc/gcc-%{version}/gcc-%{version}.tar.xz
-# Source0-md5:	d307b8748a74939359a5843f859a4dec
+# Source0-md5:	c7d1958570fbd1cd859b015774b9987a
 # svn co https://mingw-w64.svn.sourceforge.net/svnroot/mingw-w64/stable/v2.x/mingw-w64-crt mingw64-crt
 %define		_rev	5515
 Source1:	mingw64-crt.tar.xz
