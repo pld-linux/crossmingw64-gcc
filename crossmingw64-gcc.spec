@@ -9,13 +9,13 @@ Summary(pl.UTF-8):	Skrośne narzędzia programistyczne GNU dla MinGW-W64 - gcc
 Summary(pt_BR.UTF-8):	Utilitários para desenvolvimento de binários da GNU - MinGW-W64 gcc
 Summary(tr.UTF-8):	GNU geliştirme araçları - MinGW-W64 gcc
 Name:		crossmingw64-gcc
-Version:	10.5.0
+Version:	11.5.0
 Release:	1
 Epoch:		1
 License:	GPL v3+
 Group:		Development/Languages
 Source0:	https://ftp.gnu.org/gnu/gcc/gcc-%{version}/gcc-%{version}.tar.xz
-# Source0-md5:	c7d1958570fbd1cd859b015774b9987a
+# Source0-md5:	03473f26c87e05e789a32208f1fe4491
 # svn co https://mingw-w64.svn.sourceforge.net/svnroot/mingw-w64/stable/v2.x/mingw-w64-crt mingw64-crt
 %define		_rev	5515
 Source1:	mingw64-crt.tar.xz
@@ -371,6 +371,9 @@ rm -rf $RPM_BUILD_ROOT
 %dir %{gcclibdir}/include
 %{gcclibdir}/include/adxintrin.h
 %{gcclibdir}/include/ammintrin.h
+%{gcclibdir}/include/amxbf16intrin.h
+%{gcclibdir}/include/amxint8intrin.h
+%{gcclibdir}/include/amxtileintrin.h
 %{gcclibdir}/include/avx2intrin.h
 %{gcclibdir}/include/avx5124fmapsintrin.h
 %{gcclibdir}/include/avx5124vnniwintrin.h
@@ -399,6 +402,7 @@ rm -rf $RPM_BUILD_ROOT
 %{gcclibdir}/include/avx512vpopcntdqintrin.h
 %{gcclibdir}/include/avx512vpopcntdqvlintrin.h
 %{gcclibdir}/include/avxintrin.h
+%{gcclibdir}/include/avxvnniintrin.h
 %{gcclibdir}/include/bmi2intrin.h
 %{gcclibdir}/include/bmiintrin.h
 %{gcclibdir}/include/bmmintrin.h
@@ -419,9 +423,11 @@ rm -rf $RPM_BUILD_ROOT
 %{gcclibdir}/include/fxsrintrin.h
 %{gcclibdir}/include/gcov.h
 %{gcclibdir}/include/gfniintrin.h
+%{gcclibdir}/include/hresetintrin.h
 %{gcclibdir}/include/ia32intrin.h
 %{gcclibdir}/include/immintrin.h
 %{gcclibdir}/include/iso646.h
+%{gcclibdir}/include/keylockerintrin.h
 %{gcclibdir}/include/limits.h
 %{gcclibdir}/include/lwpintrin.h
 %{gcclibdir}/include/lzcntintrin.h
@@ -429,15 +435,17 @@ rm -rf $RPM_BUILD_ROOT
 %{gcclibdir}/include/mm_malloc.h
 %{gcclibdir}/include/mmintrin.h
 %{gcclibdir}/include/movdirintrin.h
+%{gcclibdir}/include/mwaitintrin.h
 %{gcclibdir}/include/mwaitxintrin.h
 %{gcclibdir}/include/nmmintrin.h
 %{gcclibdir}/include/pconfigintrin.h
-%{gcclibdir}/include/pmmintrin.h
 %{gcclibdir}/include/pkuintrin.h
+%{gcclibdir}/include/pmmintrin.h
 %{gcclibdir}/include/popcntintrin.h
 %{gcclibdir}/include/prfchwintrin.h
 %{gcclibdir}/include/rdseedintrin.h
 %{gcclibdir}/include/rtmintrin.h
+%{gcclibdir}/include/serializeintrin.h
 %{gcclibdir}/include/sgxintrin.h
 %{gcclibdir}/include/shaintrin.h
 %{gcclibdir}/include/smmintrin.h
@@ -454,6 +462,8 @@ rm -rf $RPM_BUILD_ROOT
 %{gcclibdir}/include/tbmintrin.h
 %{gcclibdir}/include/tgmath.h
 %{gcclibdir}/include/tmmintrin.h
+%{gcclibdir}/include/tsxldtrkintrin.h
+%{gcclibdir}/include/uintrintrin.h
 %{gcclibdir}/include/unwind.h
 %{gcclibdir}/include/vaesintrin.h
 %{gcclibdir}/include/varargs.h
@@ -461,6 +471,7 @@ rm -rf $RPM_BUILD_ROOT
 %{gcclibdir}/include/waitpkgintrin.h
 %{gcclibdir}/include/wbnoinvdintrin.h
 %{gcclibdir}/include/wmmintrin.h
+%{gcclibdir}/include/x86gprintrin.h
 %{gcclibdir}/include/x86intrin.h
 %{gcclibdir}/include/xmmintrin.h
 %{gcclibdir}/include/xopintrin.h
@@ -1599,6 +1610,7 @@ rm -rf $RPM_BUILD_ROOT
 %attr(755,root,root) %{archbindir}/%{target}-c++
 %attr(755,root,root) %{archbindir}/%{target}-g++
 %attr(755,root,root) %{gcclibdir}/cc1plus
+%attr(755,root,root) %{gcclibdir}/g++-mapper-server
 %{archlibdir}/libstdc++.dll.a
 %{archlibdir}/libstdc++.la
 %{archlibdir}/libstdc++fs.la
