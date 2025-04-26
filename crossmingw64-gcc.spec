@@ -191,9 +191,9 @@ libstdc++ 64-bit DLL library for Windows.
 
 %prep
 %setup -q -n gcc-%{version} -a 1
-#patch0 -p0
-%patch1 -p1
-%patch2 -p1
+#patch -P0 -p0
+%patch -P1 -p1
+%patch -P2 -p1
 
 # override snapshot version.
 echo %{version} > gcc/BASE-VER
