@@ -1,7 +1,13 @@
 #
 # Conditional build:
 %bcond_with	bootstrap	# bootstrap build (only C compiler with static runtime)
+%bcond_with	ada		# Ada language support (doesn't build for w64-mingw32)
+%bcond_without	d		# D language support
 #
+%if %{with bootstrap}
+%undefine	with_ada
+%undefine	with_d
+%endif
 Summary:	Cross MinGW-W64 GNU binary utility development utilities - gcc
 Summary(es.UTF-8):	Utilitarios para desarrollo de binarios de la GNU - MinGW-W64 gcc
 Summary(fr.UTF-8):	Utilitaires de développement binaire de GNU - MinGW-W64 gcc
@@ -165,16 +171,16 @@ generujące kod dla platformy x86_64-w64-mingw32.
 Ten pakiet zawiera skrośny kompilator g++ oraz libstdc++.
 
 %package -n crossmingw64-libstdc++-static
-Summary:	Static standard C++ library - cross MinGW32 version
-Summary(pl.UTF-8):	Statyczna biblioteka standardowa C++ - wersja skrośna MinGW32
+Summary:	Static standard C++ library - cross MinGW-W64 version
+Summary(pl.UTF-8):	Statyczna biblioteka standardowa C++ - wersja skrośna MinGW-W64
 Group:		Development/Libraries
 Requires:	%{name}-c++ = %{epoch}:%{version}-%{release}
 
 %description -n crossmingw64-libstdc++-static
-Static standard C++ library - cross MinGW32 version.
+Static standard C++ library - cross MinGW-W64 version.
 
 %description -n crossmingw64-libstdc++-static -l pl.UTF-8
-Statyczna biblioteka standardowa C++ - wersja skrośna MinGW32.
+Statyczna biblioteka standardowa C++ - wersja skrośna MinGW-W64.
 
 %package -n crossmingw64-libstdc++-dll
 Summary:	libstdc++ 64-bit DLL library for Windows
@@ -188,6 +194,188 @@ libstdc++ 64-bit DLL library for Windows.
 
 %description -n crossmingw64-libstdc++-dll -l pl.UTF-8
 64-bitowa biblioteka DLL libstdc++ dla Windows.
+
+%package objc
+Summary:	MinGW-W64 binary utility development utilities - objc
+Summary(pl.UTF-8):	Zestaw narzędzi MinGW-W64 - objc
+Group:		Development/Languages
+Requires:	%{name} = %{epoch}:%{version}-%{release}
+
+%description objc
+crossmingw64 is a complete cross-compiling development system for
+building stand-alone Microsoft Windows applications under Linux using
+the MinGW-W64 build libraries. This includes a binutils, gcc with g++
+and libstdc++, all cross targeted to x86_64-pc-mingw32.
+
+This package contains cross targeted objc compiler.
+
+%description objc -l pl.UTF-8
+crossmingw64 jest kompletnym systemem do kroskompilacji, pozwalającym
+budować aplikacje MS Windows pod Linuksem używając bibliotek mingw64.
+System składa się z binutils, gcc z g++ i libstdc++ - wszystkie
+generujące kod dla platformy x86_64-w64-mingw32.
+
+Ten pakiet zawiera kompilator objc generujący kod pod Win32.
+
+%package objc++
+Summary:	MinGW-W64 binary utility development utilities - objc++
+Summary(pl.UTF-8):	Zestaw narzędzi MinGW-W64 - objc++
+Group:		Development/Languages
+Requires:	%{name}-objc = %{epoch}:%{version}-%{release}
+
+%description objc++
+crossmingw64 is a complete cross-compiling development system for
+building stand-alone Microsoft Windows applications under Linux using
+the MinGW-W64 build libraries. This includes a binutils, gcc with g++
+and libstdc++, all cross targeted to x86_64-pc-mingw32.
+
+This package contains Objective C++ support.
+
+%description objc++ -l pl.UTF-8
+crossmingw64 jest kompletnym systemem do kroskompilacji, pozwalającym
+budować aplikacje MS Windows pod Linuksem używając bibliotek mingw64.
+System składa się z binutils, gcc z g++ i libstdc++ - wszystkie
+generujące kod dla platformy x86_64-w64-mingw32.
+
+Ten pakiet zawiera obsługę języka Objective C++.
+
+%package -n crossmingw64-libobjc-static
+Summary:	Static Objective C library - cross MinGW-W64 version
+Summary(pl.UTF-8):	Statyczna biblioteka Objective C - wersja skrośna MinGW-W64
+Group:		Development/Libraries
+Requires:	%{name}-objc = %{epoch}:%{version}-%{release}
+
+%description -n crossmingw64-libobjc-static
+Static Objective C library - cross MinGW-W64 version.
+
+%description -n crossmingw64-libobjc-static -l pl.UTF-8
+Statyczna biblioteka Objective C - wersja skrośna MinGW-W64.
+
+%package -n crossmingw64-libobjc-dll
+Summary:	libobjc 64-bit DLL library for Windows
+Summary(pl.UTF-8):	Biblioteka 64-bitowa DLL libobjc dla Windows
+Group:		Applications/Emulators
+Requires:	crossmingw64-libgcc-dll = %{epoch}:%{version}-%{release}
+#Requires:	wine64 ?
+
+%description -n crossmingw64-libobjc-dll
+libobjc 64-bit DLL library for Windows.
+
+%description -n crossmingw64-libobjc-dll -l pl.UTF-8
+Biblioteka 64-bitowa DLL libobjc dla Windows.
+
+%package d
+Summary:	MinGW-W64 binary utility development utilities - D
+Summary(pl.UTF-8):	Zestaw narzędzi MinGW-W64 - D
+Group:		Development/Languages
+Requires:	%{name} = %{epoch}:%{version}-%{release}
+
+%description d
+crossmingw64 is a complete cross-compiling development system for
+building stand-alone Microsoft Windows applications under Linux using
+the MinGW-W64 build libraries. This includes a binutils, gcc with g++
+and libstdc++, all cross targeted to x86_64-pc-mingw32.
+
+This package contains cross targeted D compiler.
+
+%description d -l pl.UTF-8
+crossmingw64 jest kompletnym systemem do kroskompilacji, pozwalającym
+budować aplikacje MS Windows pod Linuksem używając bibliotek mingw64.
+System składa się z binutils, gcc z g++ i libstdc++ - wszystkie
+generujące kod dla platformy x86_64-w64-mingw32.
+
+Ten pakiet zawiera kompilator języka D generujący kod pod Win32.
+
+%package fortran
+Summary:	MinGW-W64 binary utility development utilities - Fortran
+Summary(pl.UTF-8):	Zestaw narzędzi MinGW-W64 - Fortran
+Group:		Development/Languages
+Requires:	%{name} = %{epoch}:%{version}-%{release}
+Requires:	crossmingw64-libquadmath = %{epoch}:%{version}-%{release}
+
+%description fortran
+crossmingw64 is a complete cross-compiling development system for
+building stand-alone Microsoft Windows applications under Linux using
+the MinGW-W64 build libraries. This includes a binutils, gcc with g++
+and libstdc++, all cross targeted to x86_64-pc-mingw32.
+
+This package contains cross targeted Fortran compiler.
+
+%description fortran -l pl.UTF-8
+crossmingw64 jest kompletnym systemem do kroskompilacji, pozwalającym
+budować aplikacje MS Windows pod Linuksem używając bibliotek mingw64.
+System składa się z binutils, gcc z g++ i libstdc++ - wszystkie
+generujące kod dla platformy x86_64-w64-mingw32.
+
+Ten pakiet zawiera kompilator Fortranu generujący kod pod Win32.
+
+%package -n crossmingw64-libgfortran-static
+Summary:	Static Fortran library - cross MinGW-W64 version
+Summary(pl.UTF-8):	Statyczna biblioteka Fortranu - wersja skrośna MinGW-W64
+Group:		Development/Libraries
+Requires:	%{name}-fortran = %{epoch}:%{version}-%{release}
+
+%description -n crossmingw64-libgfortran-static
+Static Fortran library - cross MinGW-W64 version.
+
+%description -n crossmingw64-libgfortran-static -l pl.UTF-8
+Statyczna biblioteka Fortranu - wersja skrośna MinGW-W64.
+
+%package -n crossmingw64-libgfortran-dll
+Summary:	libgfortran 64-bit DLL library for Windows
+Summary(pl.UTF-8):	Biblioteka 64-bitowa DLL libgfortran dla Windows
+Group:		Applications/Emulators
+Requires:	crossmingw64-libquadmath-dll
+
+%description -n crossmingw64-libgfortran-dll
+libgfortran 64-bit DLL library for Windows.
+
+%description -n crossmingw64-libgfortran-dll -l pl.UTF-8
+Biblioteka 64-bitowa DLL libgfortran dla Windows.
+
+%package -n crossmingw64-libquadmath
+Summary:	GCC __float128 support library - cross MinGW-W64 version
+Summary(pl.UTF-8):	Biblioteka do obsługi typu __float128 - wersja skrośna MinGW-W64
+License:	GPL v2+ with linking exception
+Group:		Development/Libraries
+Requires:	%{name} = %{epoch}:%{version}-%{release}
+
+%description -n crossmingw64-libquadmath
+This package contains cross MinGW-W64 version of GCC support library
+which is needed for __float128 math support and for Fortran REAL*16
+support.
+
+%description -n crossmingw64-libquadmath -l pl.UTF-8
+Ten pakiet zawiera wersję skrośną MinGW-W64 biblioteki GCC do obsługi
+operacji matematycznych na zmiennych typu __float128 oraz typu REAL*16
+w Fortranie.
+
+%package -n crossmingw64-libquadmath-static
+Summary:	Static GCC __float128 support library - cross MinGW-W64 version
+Summary(pl.UTF-8):	Biblioteka statyczna GCC do obsługi typu __float128 - wersja skrośna MinGW-W64
+License:	GPL v2+ with linking exception
+Group:		Development/Libraries
+Requires:	crossmingw64-libquadmath = %{epoch}:%{version}-%{release}
+
+%description -n crossmingw64-libquadmath-static
+Static GCC __float128 support library - cross MinGW-W64 version.
+
+%description -n crossmingw64-libquadmath-static -l pl.UTF-8
+Biblioteka statyczna GCC do obsługi typu __float128 - wersja skrośna
+MinGW-W64.
+
+%package -n crossmingw64-libquadmath-dll
+Summary:	64-bit DLL GCC __float128 support library for Windows
+Summary(pl.UTF-8):	Biblioteka 64-bitowa DLL GCC do obsługi typu __float128 dla Windows
+License:	GPL v2+ with linking exception
+Group:		Applications/Emulators
+Requires:	wine
+
+%description -n crossmingw64-libquadmath-dll
+64-bit DLL GCC __float128 support library for Windows.
+
+%description -n crossmingw64-libquadmath-dll -l pl.UTF-8
+Biblioteka 64-bitowa DLL GCC do obsługi typu __float128 dla Windows.
 
 %prep
 %setup -q -n gcc-%{version} -a 1
@@ -238,11 +426,11 @@ TEXCONFIG=false \
 	--enable-decimal-float=yes \
 	--enable-fully-dynamic-string \
 	--disable-isl-version-check \
-	--enable-languages="c%{!?with_bootstrap:,c++}" \
+	--enable-languages="c%{!?with_bootstrap:,c++,fortran,objc,obj-c++}%{?with_ada:,ada}%{?with_d:,d}" \
 	%{?with_bootstrap:--disable-libatomic} \
 	--disable-libcc1 \
 	--disable-libitm \
-	--disable-libquadmath \
+	--enable-libquadmath%{?with_bootstrap:=no} \
 	--disable-libssp \
 	--enable-libstdcxx-allocator=new \
 	--disable-libstdcxx-pch \
@@ -297,11 +485,17 @@ gccdir=$RPM_BUILD_ROOT%{gcclibdir}
 
 # these must be symlinks: gcclibdir is calculated relatively to real binary path
 ln -sf %{archbindir}/%{target}-gcc $RPM_BUILD_ROOT%{_bindir}/%{target}-gcc
-ln -sf %{archbindir}/%{target}-g++ $RPM_BUILD_ROOT%{_bindir}/%{target}-g++
 ln -sf %{archbindir}/%{target}-cpp $RPM_BUILD_ROOT%{_bindir}/%{target}-cpp
 ln -sf %{archbindir}/%{target}-gcov $RPM_BUILD_ROOT%{_bindir}/%{target}-gcov
 ln -sf %{archbindir}/%{target}-gcov-dump $RPM_BUILD_ROOT%{_bindir}/%{target}-gcov-dump
 ln -sf %{archbindir}/%{target}-gcov-tool $RPM_BUILD_ROOT%{_bindir}/%{target}-gcov-tool
+%if %{without bootstrap}
+ln -sf %{archbindir}/%{target}-g++ $RPM_BUILD_ROOT%{_bindir}/%{target}-g++
+ln -sf %{archbindir}/%{target}-gfortran $RPM_BUILD_ROOT%{_bindir}/%{target}-gfortran
+%endif
+%if %{with d}
+ln -sf %{archbindir}/%{target}-gdc $RPM_BUILD_ROOT%{_bindir}/%{target}-gdc
+%endif
 
 %{__make} -C mingw64-crt -j1 install \
 	DESTDIR=$RPM_BUILD_ROOT
@@ -1627,4 +1821,71 @@ rm -rf $RPM_BUILD_ROOT
 %files -n crossmingw64-libstdc++-dll
 %defattr(644,root,root,755)
 %{_dll64dir}/libstdc++-8.dll
+
+%files objc
+%defattr(644,root,root,755)
+%doc libobjc/README
+%attr(755,root,root) %{gcclibdir}/cc1obj
+%{archlibdir}/libobjc.dll.a
+%{archlibdir}/libobjc.la
+%{gcclibdir}/include/objc
+
+%files objc++
+%defattr(644,root,root,755)
+%doc gcc/objcp/ChangeLog
+%attr(755,root,root) %{gcclibdir}/cc1objplus
+
+%files -n crossmingw64-libobjc-static
+%defattr(644,root,root,755)
+%{archlibdir}/libobjc.a
+
+%files -n crossmingw64-libobjc-dll
+%defattr(644,root,root,755)
+%{_dll64dir}/libobjc-4.dll
+
+%if %{with d}
+%files d
+%defattr(644,root,root,755)
+%attr(755,root,root) %{_bindir}/%{target}-gdc
+%attr(755,root,root) %{archbindir}/%{target}-gdc
+%attr(755,root,root) %{gcclibdir}/d21
+%{_mandir}/man1/%{target}-gdc.1*
+%endif
+
+%files fortran
+%defattr(644,root,root,755)
+%attr(755,root,root) %{_bindir}/%{target}-gfortran
+%attr(755,root,root) %{archbindir}/%{target}-gfortran
+%attr(755,root,root) %{gcclibdir}/f951
+%{archlibdir}/libgfortran.dll.a
+%{archlibdir}/libgfortran.la
+%{archlibdir}/libgfortran.spec
+%{gcclibdir}/finclude
+%{gcclibdir}/include/ISO_Fortran_binding.h
+%{gcclibdir}/libcaf_single.a
+%{gcclibdir}/libcaf_single.la
+%{_mandir}/man1/%{target}-gfortran.1*
+
+%files -n crossmingw64-libgfortran-static
+%defattr(644,root,root,755)
+%{archlibdir}/libgfortran.a
+
+%files -n crossmingw64-libgfortran-dll
+%defattr(644,root,root,755)
+%{_dll64dir}/libgfortran-5.dll
+
+%files -n crossmingw64-libquadmath
+%defattr(644,root,root,755)
+%{archlibdir}/libquadmath.dll.a
+%{archlibdir}/libquadmath.la
+%{gcclibdir}/include/quadmath.h
+%{gcclibdir}/include/quadmath_weak.h
+
+%files -n crossmingw64-libquadmath-static
+%defattr(644,root,root,755)
+%{archlibdir}/libquadmath.a
+
+%files -n crossmingw64-libquadmath-dll
+%defattr(644,root,root,755)
+%{_dll64dir}/libquadmath-0.dll
 %endif
