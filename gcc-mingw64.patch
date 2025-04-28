@@ -152,9 +152,33 @@
     };
  
  _GLIBCXX_END_NAMESPACE_VERSION
---- gcc-9.5.0/libstdc++-v3/src/c++11/system_error.cc.orig	2022-05-27 09:21:13.447391751 +0200
-+++ gcc-9.5.0/libstdc++-v3/src/c++11/system_error.cc	2023-04-16 20:09:05.676500055 +0200
-@@ -168,7 +168,7 @@ namespace
+--- gcc-12.4.0/libstdc++-v3/src/c++11/system_error.cc.orig	2024-06-20 10:08:10.000000000 +0200
++++ gcc-12.4.0/libstdc++-v3/src/c++11/system_error.cc	2025-04-27 19:31:06.902992927 +0200
+@@ -153,7 +153,11 @@ namespace
+ 	X (CANNOT_MAKE,			EPERM);
+ 	X (CHILD_NOT_COMPLETE,		EBUSY);
+ 	X (COMMITMENT_LIMIT,		EAGAIN);
++#ifdef ECONNREFUSED
+ 	X (CONNECTION_REFUSED,		ECONNREFUSED);
++#else
++	X (CONNECTION_REFUSED,		WSAECONNREFUSED);
++#endif
+ 	X (CRC,				EIO);
+ 	X (DEVICE_DOOR_OPEN,		EIO);
+ 	X (DEVICE_IN_USE,		EAGAIN);
+@@ -200,7 +204,11 @@ namespace
+ 	X (MAX_THRDS_REACHED,		EAGAIN);
+ 	X (META_EXPANSION_TOO_LONG,	EINVAL);
+ 	X (MOD_NOT_FOUND,		ENOENT);
++#ifdef EMSGSIZE
+ 	X (MORE_DATA,			EMSGSIZE);
++#else
++	X (MORE_DATA,			WSAEMSGSIZE);
++#endif
+ 	X (NEGATIVE_SEEK,		EINVAL);
+ 	X (NETNAME_DELETED,		ENOENT);
+ 	X (NOACCESS,			EFAULT);
+@@ -355,7 +363,7 @@ namespace
  #ifdef EISDIR
        case EISDIR:
  #endif
@@ -163,7 +187,7 @@
        case ELOOP:
  #endif
  #ifdef EMFILE
-@@ -265,7 +265,7 @@ namespace
+@@ -453,10 +461,10 @@ namespace
  #if defined EOPNOTSUPP && (!defined ENOTSUP || EOPNOTSUPP != ENOTSUP)
        case EOPNOTSUPP:
  #endif
@@ -171,4 +195,28 @@
 +#if defined(EOVERFLOW) && (EOVERFLOW != ERANGE)
        case EOVERFLOW:
  #endif
- #ifdef EOWNERDEAD
+-#ifdef EOWNERDEAD
++#if defined(EOWNERDEAD) && (!defined EILSEQ || EOWNERDEAD != EILSEQ)
+       case EOWNERDEAD:
+ #endif
+ #ifdef EPERM
+--- gcc-12.4.0/libstdc++-v3/src/c++17/fast_float/fast_float.h.orig	2024-06-20 10:08:10.000000000 +0200
++++ gcc-12.4.0/libstdc++-v3/src/c++17/fast_float/fast_float.h	2025-04-27 19:42:34.869265894 +0200
+@@ -120,7 +120,7 @@ from_chars_result from_chars_advanced(co
+   #endif
+ #endif
+ 
+-#if ((defined(_WIN32) || defined(_WIN64)) && !defined(__clang__))
++#if ((defined(_WIN32) || defined(_WIN64)) && defined(_MSC_VER) && !defined(__clang__))
+ #include <intrin.h>
+ #endif
+ 
+@@ -275,7 +275,7 @@ fastfloat_really_inline value128 full_mu
+   // ARM64 has native support for 64-bit multiplications, no need to emulate
+   answer.high = __umulh(a, b);
+   answer.low = a * b;
+-#elif defined(FASTFLOAT_32BIT) || (defined(_WIN64) && !defined(__clang__))
++#elif defined(FASTFLOAT_32BIT) || (defined(_WIN64) && defined(_MSC_VER) && !defined(__clang__))
+   answer.low = _umul128(a, b, &answer.high); // _umul128 not available on ARM64
+ #elif defined(FASTFLOAT_64BIT)
+   __uint128_t r = ((__uint128_t)a) * b;
