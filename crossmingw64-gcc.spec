@@ -16,19 +16,19 @@ Summary(pl.UTF-8):	Skrośne narzędzia programistyczne GNU dla MinGW-W64 - gcc
 Summary(pt_BR.UTF-8):	Utilitários para desenvolvimento de binários da GNU - MinGW-W64 gcc
 Summary(tr.UTF-8):	GNU geliştirme araçları - MinGW-W64 gcc
 Name:		crossmingw64-gcc
-Version:	12.4.0
+Version:	12.5.0
 Release:	1
 Epoch:		1
 License:	GPL v3+
 Group:		Development/Languages
 Source0:	https://ftp.gnu.org/gnu/gcc/gcc-%{version}/gcc-%{version}.tar.xz
-# Source0-md5:	fd7779aee878db67456575922281fa71
+# Source0-md5:	605d4923d9daabcd8c8c22d844af57e5
 # svn co https://mingw-w64.svn.sourceforge.net/svnroot/mingw-w64/stable/v2.x/mingw-w64-crt mingw64-crt
 %define		_rev	5515
 Source1:	mingw64-crt.tar.xz
 # Source1-md5:	bf9051e7e4deb445e9e8877ca68211e1
-Patch0:		gcc-branch.diff
-# Patch0-md5:	57034537c40d4d70828540f9c0bc2cf3
+#Patch0:		gcc-branch.diff
+## Patch0-md5:	57034537c40d4d70828540f9c0bc2cf3
 Patch1:		gcc-mingw-dirs.patch
 Patch2:		gcc-mingw64.patch
 URL:		https://www.mingw-w64.org/
